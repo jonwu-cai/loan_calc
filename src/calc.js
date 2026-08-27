@@ -89,6 +89,21 @@ export function project(inp) {
       taxSaveM,
       gross,
       net,
+      // Full working for the tax-savings breakdown (annual figures).
+      tax: {
+        interest,
+        propTaxAnnual,
+        stateIncTax,
+        saltCap: inp.saltCap,
+        saltBefore,
+        saltAfter,
+        propDeductibleFed,
+        fedRate: inp.fedRate,
+        caRate: inp.caRate,
+        fedSavings,
+        caSavings,
+        annualSavings: fedSavings + caSavings,
+      },
     })
 
     assessed *= 1 + inp.propTaxGrowth

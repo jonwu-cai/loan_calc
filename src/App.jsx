@@ -175,6 +175,8 @@ export default function App() {
             <Row label="Net effective monthly" value={y1.net} strong accent />
           </div>
 
+          <TaxExplainer y1={y1} filing={inp.filing} />
+
           <div className="table-wrap">
             <h2>{inp.years}-year projection</h2>
             <table>
@@ -213,6 +215,87 @@ export default function App() {
         </section>
       </div>
     </div>
+  )
+}
+
+function TaxExplainer({ y1, filing }) {
+  const t = y1.tax
+  const roomForProp = Math.max(0, t.saltCap - t.stateIncTax)
+  const pct = (r) => `${(r * 100).toFixed(2)}%`
+  return (
+    <details className="explainer" open>
+      <summary>How the tax savings are calculated (Year 1)</summary>
+      <p className="explainer-intro">
+        The benefit comes from deducting two things — <strong>mortgage interest</strong> and{' '}
+        <strong>property tax</strong> — then multiplying by your marginal tax rates. Federal and
+        California are computed separately because CA has no SALT cap.
+      </p>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">1</span> Deductible mortgage interest</div>
+        <div className="step-body">
+          <span>Interest paid in year 1 (from the amortization schedule)</span>
+          <span className="calc-out">{usd(t.interest)}</span>
+        </div>
+      </div>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">2</span> How much property tax is deductible federally (SALT cap)</div>
+        <div className="step-body">
+          <span>Est. CA state income tax ({filing === 'mfj' ? 'MFJ' : 'single'}) — already uses up SALT room</span>
+          <span className="calc-out">{usd(t.stateIncTax)}</span>
+        </div>
+        <div className="step-body">
+          <span>SALT cap</span>
+          <span className="calc-out">{usd(t.saltCap)}</span>
+        </div>
+        <div className="step-body">
+          <span>Room left for property tax = cap − state income tax</span>
+          <span className="calc-out">{usd(roomForProp)}</span>
+        </div>
+        <div className="step-body">
+          <span>Property tax paid</span>
+          <span className="calc-out">{usd(t.propTaxAnnual)}</span>
+        </div>
+        <div className="step-body highlight">
+          <span>Federally deductible property tax = min(property tax, room)</span>
+          <span className="calc-out">{usd(t.propDeductibleFed)}</span>
+        </div>
+      </div>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">3</span> Federal savings</div>
+        <div className="step-body">
+          <span>({usd(t.interest)} interest + {usd(t.propDeductibleFed)} property tax) × {pct(t.fedRate)}</span>
+          <span className="calc-out">{usd(t.fedSavings)}</span>
+        </div>
+      </div>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">4</span> California savings <span className="tag">no SALT cap</span></div>
+        <div className="step-body">
+          <span>({usd(t.interest)} interest + {usd(t.propTaxAnnual)} property tax) × {pct(t.caRate)}</span>
+          <span className="calc-out">{usd(t.caSavings)}</span>
+        </div>
+      </div>
+
+      <div className="step total-step">
+        <div className="step-body strong">
+          <span>Total annual tax savings = federal + CA</span>
+          <span className="calc-out">{usd(t.annualSavings)}</span>
+        </div>
+        <div className="step-body strong accent-row">
+          <span>Per month = ÷ 12</span>
+          <span className="calc-out">{usd(t.annualSavings / 12)}</span>
+        </div>
+      </div>
+
+      <p className="explainer-note">
+        Simplifying assumption: because your state income tax alone already exceeds the standard
+        deduction, buying is treated as adding mortgage interest + property tax on top of deductions
+        you'd take anyway. Edit the federal/CA rates and SALT cap above to match your exact bracket.
+      </p>
+    </details>
   )
 }
 

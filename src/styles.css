@@ -171,3 +171,47 @@ tbody tr:nth-child(even) { background: var(--panel-2); }
 .accent-text { color: var(--accent); font-weight: 600; }
 
 .disclaimer { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+.explainer {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 6px 18px 18px;
+  box-shadow: var(--shadow);
+}
+.explainer summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 0;
+  list-style: none;
+  user-select: none;
+}
+.explainer summary::-webkit-details-marker { display: none; }
+.explainer summary::before { content: '▸'; color: var(--muted); margin-right: 8px; display: inline-block; transition: transform 0.15s; }
+.explainer[open] summary::before { transform: rotate(90deg); }
+.explainer-intro { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; }
+
+.step { border-top: 1px solid var(--border); padding: 12px 0; }
+.step-head { font-weight: 600; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--primary); color: #fff; font-size: 12px; font-weight: 700; flex: none;
+}
+.tag {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em;
+  background: var(--accent-soft); color: var(--accent);
+  padding: 2px 7px; border-radius: 6px; font-weight: 700;
+}
+.step-body {
+  display: flex; justify-content: space-between; gap: 16px;
+  font-size: 13.5px; color: var(--muted); padding: 3px 0;
+}
+.step-body .calc-out { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.step-body.highlight { color: var(--text); font-weight: 600; }
+.step-body.highlight .calc-out { color: var(--primary); }
+.step-body.strong { color: var(--text); font-weight: 700; font-size: 15px; }
+.total-step { border-top: 2px solid var(--border); }
+.step-body.accent-row .calc-out { color: var(--accent); }
+.explainer-note { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; }
