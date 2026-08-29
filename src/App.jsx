@@ -619,6 +619,20 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
                 <Field key={k} fieldKey={k} label={label} kind={kind} value={inp[k]} onChange={update} />
               ))}
             </div>
+            {g.title === 'Sale' && (
+              <p className="caption">
+                Sale price is{' '}
+                <strong>
+                  {inp.salePrice >= buyInp.price ? '+' : ''}
+                  {(buyInp.price > 0 ? (inp.salePrice / buyInp.price - 1) * 100 : 0).toFixed(1)}%
+                </strong>{' '}
+                vs. the {usd(buyInp.price)} purchase price
+                {c.hy > 0 && buyInp.price > 0 && (
+                  <> ({((Math.pow(inp.salePrice / buyInp.price, 1 / c.hy) - 1) * 100).toFixed(1)}%/yr)</>
+                )}
+                .
+              </p>
+            )}
             {g.title === 'Capital Gains' && (
               <>
                 <details className="explainer inline-explainer">
