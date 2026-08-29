@@ -581,6 +581,21 @@ function CompareView({ buyInp, rentInp }) {
             {usd(inp.capGainsExclusion)} of gain ($250k single / $500k married). Only the gain above
             that exclusion is taxed, here at {(inp.capGainsRate * 100).toFixed(1)}%.
           </p>
+          <details className="explainer inline-explainer">
+            <summary>How you qualify — the 2-out-of-5-year rules</summary>
+            <p className="explainer-intro">
+              To claim the {usd(inp.capGainsExclusion)} exclusion you must pass two basic tests:
+            </p>
+            <div className="step-body highlight">
+              <span><strong>Ownership test</strong> — owned the home at least 24 months during the 5-year period before the sale.</span>
+            </div>
+            <div className="step-body highlight">
+              <span><strong>Use test</strong> — lived in it as your primary residence at least 24 months during that same 5-year window.</span>
+            </div>
+            <div className="step-body highlight">
+              <span><strong>Frequency limit</strong> — you can only use this exclusion once every two years.</span>
+            </div>
+          </details>
         </div>
 
         <div className="breakdown">

@@ -195,6 +195,9 @@ td.col-hl { color: var(--primary); font-weight: 600; }
 
 .disclaimer { font-size: 12.5px; color: var(--muted); margin: 0; }
 .caption { font-size: 12.5px; color: var(--muted); margin: 12px 0 0; line-height: 1.55; }
+.inline-explainer { box-shadow: none; border: none; padding: 0; margin-top: 4px; }
+.inline-explainer summary { font-size: 13.5px; padding: 8px 0; }
+.inline-explainer .step-body { padding: 5px 0; }
 
 .explainer {
   background: var(--panel);
