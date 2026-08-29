@@ -223,13 +223,6 @@ function BuyView() {
             <Stat label="Est. tax savings / mo" value={usd(y1.taxSaveM)} />
           </div>
 
-          <CumulativeTotals
-            rows={result.rows}
-            primaryKey="gross"
-            secondaryKey="net"
-            secondaryLabel="Net after tax savings"
-          />
-
           <div className="breakdown">
             <h2>Year 1 monthly breakdown</h2>
             <Row label="Mortgage (P&I)" value={y1.pi} />
@@ -283,6 +276,13 @@ function BuyView() {
             monthly checks — your real out-of-pocket is the gross figure. Marginal rates, SALT cap,
             and property-tax rate are editable estimates; verify against your actual situation.
           </p>
+
+          <CumulativeTotals
+            rows={result.rows}
+            primaryKey="gross"
+            secondaryKey="net"
+            secondaryLabel="Net after tax savings"
+          />
         </section>
       </div>
   )
@@ -416,8 +416,6 @@ function RentView() {
           </div>
         </div>
 
-        <CumulativeTotals rows={rows} primaryKey="total" />
-
         <div className="breakdown">
           <h2>Year 1 monthly breakdown</h2>
           <Row label="Rent" value={y1.rent} />
@@ -459,6 +457,8 @@ function RentView() {
           Total paid over {inp.years} years at these growth rates: <strong>{usd(totalPaid)}</strong>.
           All figures are monthly unless noted; growth compounds annually.
         </p>
+
+        <CumulativeTotals rows={rows} primaryKey="total" />
       </section>
     </div>
   )
