@@ -250,7 +250,7 @@ function BuyView() {
                   <th>PG&E</th>
                   <th>Tax save</th>
                   <th>Gross/mo</th>
-                  <th>Net/mo</th>
+                  <th className="col-hl">Net/mo</th>
                   <th className="faded">Total</th>
                 </tr>
               </thead>
@@ -265,7 +265,7 @@ function BuyView() {
                     <td>{usd(r.pge)}</td>
                     <td className="muted">−{usd(r.taxSaveM)}</td>
                     <td>{usd(r.gross)}</td>
-                    <td className="accent-text">{usd(r.net)}</td>
+                    <td className="accent-text col-hl">{usd(r.net)}</td>
                     <td className="faded">{usd(result.rows.slice(0, i + 1).reduce((s, x) => s + x.gross * 12, 0))}</td>
                   </tr>
                 ))}
@@ -430,7 +430,7 @@ function RentView() {
                 <th>PG&E</th>
                 <th>Water</th>
                 <th>Trash</th>
-                <th>Total/mo</th>
+                <th className="col-hl">Total/mo</th>
                 <th className="faded">Total</th>
               </tr>
             </thead>
@@ -442,7 +442,7 @@ function RentView() {
                   <td>{usd(r.pge)}</td>
                   <td>{usd(r.water)}</td>
                   <td>{usd(r.trash)}</td>
-                  <td className="accent-text">{usd(r.total)}</td>
+                  <td className="accent-text col-hl">{usd(r.total)}</td>
                   <td className="faded">{usd(rows.slice(0, i + 1).reduce((s, x) => s + x.total * 12, 0))}</td>
                 </tr>
               ))}
