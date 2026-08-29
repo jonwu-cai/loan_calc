@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { project, projectRent } from './calc.js'
+import { project, projectRent, remainingBalance } from './calc.js'
 
 const usd = (n, dp = 0) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: dp, minimumFractionDigits: dp })
@@ -54,6 +54,34 @@ const RENT_GROUPS = [
       ['pgeGrowth', 'PG&E growth', 'pct'],
       ['waterGrowth', 'Water growth', 'pct'],
       ['trashGrowth', 'Trash growth', 'pct'],
+    ],
+  },
+]
+
+const COMPARE_DEFAULTS = {
+  holdYears: 5,
+  salePrice: 900000,
+  closingCostPct: 0.1,
+  renovation: 0,
+  capGainsExclusion: 250000,
+  capGainsRate: 0.15,
+}
+
+const COMPARE_GROUPS = [
+  {
+    title: 'Sale',
+    fields: [
+      ['holdYears', 'Years before selling', 'num'],
+      ['salePrice', 'Sale price', 'usd'],
+      ['closingCostPct', 'Closing cost', 'pct'],
+      ['renovation', 'Renovation', 'usd'],
+    ],
+  },
+  {
+    title: 'Capital Gains',
+    fields: [
+      ['capGainsExclusion', 'Cap gains exclusion', 'usd'],
+      ['capGainsRate', 'Cap gains tax rate', 'pct'],
     ],
   },
 ]
@@ -127,8 +155,18 @@ function Field({ fieldKey, label, kind, value, onChange }) {
   )
 }
 
+const TABS = [
+  ['buy', 'Buy (condo)'],
+  ['rent', 'Rent (today)'],
+  ['compare', 'Compare'],
+]
+
 export default function App() {
   const [tab, setTab] = useState('buy')
+  // Lifted so the Compare tab sees the exact inputs used on the Buy and Rent tabs.
+  const [buyInp, setBuyInp] = useState(DEFAULTS)
+  const [rentInp, setRentInp] = useState(RENT_DEFAULTS)
+
   return (
     <div className="app">
       <header className="header">
@@ -140,31 +178,27 @@ export default function App() {
       </header>
 
       <div className="tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === 'buy'}
-          className={`tab${tab === 'buy' ? ' active' : ''}`}
-          onClick={() => setTab('buy')}
-        >
-          Buy (condo)
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'rent'}
-          className={`tab${tab === 'rent' ? ' active' : ''}`}
-          onClick={() => setTab('rent')}
-        >
-          Rent (today)
-        </button>
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            className={`tab${tab === key ? ' active' : ''}`}
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {tab === 'buy' ? <BuyView /> : <RentView />}
+      {tab === 'buy' && <BuyView inp={buyInp} setInp={setBuyInp} />}
+      {tab === 'rent' && <RentView inp={rentInp} setInp={setRentInp} />}
+      {tab === 'compare' && <CompareView buyInp={buyInp} rentInp={rentInp} />}
     </div>
   )
 }
 
-function BuyView() {
-  const [inp, setInp] = useState(DEFAULTS)
+function BuyView({ inp, setInp }) {
   const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
   const reset = () => setInp(DEFAULTS)
 
@@ -364,8 +398,7 @@ function TaxExplainer({ y1, filing }) {
   )
 }
 
-function RentView() {
-  const [inp, setInp] = useState(RENT_DEFAULTS)
+function RentView({ inp, setInp }) {
   const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
   const reset = () => setInp(RENT_DEFAULTS)
 
@@ -453,6 +486,115 @@ function RentView() {
         <p className="disclaimer">
           Total paid over {inp.years} years at these growth rates: <strong>{usd(totalPaid)}</strong>.
           All figures are monthly unless noted; growth compounds annually.
+        </p>
+      </section>
+    </div>
+  )
+}
+
+function CompareView({ buyInp, rentInp }) {
+  const [inp, setInp] = useState(COMPARE_DEFAULTS)
+  const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
+  const reset = () => setInp(COMPARE_DEFAULTS)
+
+  const c = useMemo(() => {
+    const hy = Math.max(1, Math.round(inp.holdYears))
+
+    // Cumulative cash paid over the holding period on each path.
+    const buyRes = project({ ...buyInp, years: hy })
+    const rentRes = projectRent({ ...rentInp, years: hy })
+    const buyPaid = buyRes.rows.reduce((s, r) => s + r.gross * 12, 0)
+    const rentPaid = rentRes.rows.reduce((s, r) => s + r.total * 12, 0)
+
+    // Sale side.
+    const loanBal = remainingBalance(buyRes.loan, buyInp.rate, buyInp.termYears, hy)
+    const closingCosts = inp.salePrice * inp.closingCostPct
+    // Capital gain: proceeds net of selling costs and improvements, minus purchase price.
+    const capitalGain = inp.salePrice - closingCosts - inp.renovation - buyInp.price
+    const taxableGain = Math.max(0, capitalGain - inp.capGainsExclusion)
+    const capGainsTax = taxableGain * inp.capGainsRate
+    const moneyBack =
+      inp.salePrice - closingCosts - inp.renovation - loanBal - capGainsTax
+
+    const netBuyCost = buyPaid - moneyBack
+    const netDiff = netBuyCost - rentPaid // <0 => buying is cheaper
+
+    return {
+      hy, buyPaid, rentPaid, loanBal, closingCosts,
+      capitalGain, taxableGain, capGainsTax, moneyBack, netBuyCost, netDiff,
+    }
+  }, [inp, buyInp, rentInp])
+
+  const buyCheaper = c.netDiff < 0
+  const advantage = Math.abs(c.netDiff)
+
+  return (
+    <div className="layout">
+      <section className="inputs">
+        {COMPARE_GROUPS.map((g) => (
+          <div className="group" key={g.title}>
+            <h2>{g.title}</h2>
+            <div className="grid">
+              {g.fields.map(([k, label, kind]) => (
+                <Field key={k} fieldKey={k} label={label} kind={kind} value={inp[k]} onChange={update} />
+              ))}
+            </div>
+          </div>
+        ))}
+        <button className="reset" onClick={reset}>Reset to defaults</button>
+      </section>
+
+      <section className="outputs">
+        <div className="hero">
+          <div className="hero-card primary">
+            <span className="hero-label">Money back from sale</span>
+            <span className="hero-value">{usd(c.moneyBack)}</span>
+            <span className="hero-note">cash in pocket after selling in year {c.hy}</span>
+          </div>
+          <div className={`hero-card ${buyCheaper ? 'accent' : ''}`}>
+            <span className="hero-label">{buyCheaper ? 'Buying is cheaper by' : 'Renting is cheaper by'}</span>
+            <span className="hero-value">{usd(advantage)}</span>
+            <span className="hero-note">net cost of buying vs. renting, over {c.hy} years</span>
+          </div>
+        </div>
+
+        <div className="breakdown">
+          <h2>Money back from selling (year {c.hy})</h2>
+          <Row label="Sale price" value={inp.salePrice} />
+          <Row label={`Closing costs (${(inp.closingCostPct * 100).toFixed(1)}%)`} value={-c.closingCosts} muted />
+          <Row label="Renovation" value={-inp.renovation} muted />
+          <Row label="Remaining mortgage payoff" value={-c.loanBal} muted />
+          <Row label="Capital gains tax" value={-c.capGainsTax} muted />
+          <Row label="Money back" value={c.moneyBack} strong accent />
+        </div>
+
+        <div className="breakdown">
+          <h2>Capital gains</h2>
+          <Row label="Capital gain (sale − closing − renovation − purchase price)" value={c.capitalGain} />
+          <Row label={`Exclusion`} value={-inp.capGainsExclusion} muted />
+          <Row label="Taxable gain" value={c.taxableGain} />
+          <Row label={`Tax (${(inp.capGainsRate * 100).toFixed(1)}%)`} value={c.capGainsTax} strong />
+        </div>
+
+        <div className="breakdown">
+          <h2>Net comparison over {c.hy} years</h2>
+          <Row label="Buy — total cash paid" value={c.buyPaid} />
+          <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
+          <Row label="Buy — net cost of owning" value={c.netBuyCost} strong />
+          <Row label="Rent — total cash paid" value={c.rentPaid} strong />
+          <Row
+            label={buyCheaper ? 'Buying saves' : 'Renting saves'}
+            value={advantage}
+            strong
+            accent
+          />
+        </div>
+
+        <p className="disclaimer">
+          Net cost of owning = all cash paid (P&I, taxes, HOA, insurance, utilities) minus what you
+          walk away with at sale. A negative net difference means buying costs less than renting over
+          the same period. Capital gain adds renovation and closing costs to basis; the exclusion and
+          rate are editable estimates — verify against your actual situation.
         </p>
       </section>
     </div>

@@ -49,6 +49,17 @@ export function yearInterest(loan, annualRate, termYears, M, yearIndex) {
   return { interest: totInt, endBalance: bal }
 }
 
+// Remaining mortgage balance after a whole number of years of payments.
+export function remainingBalance(loan, annualRate, termYears, yearsPaid) {
+  const r = annualRate / 12
+  const n = termYears * 12
+  const M = monthlyPI(loan, annualRate, termYears)
+  let bal = loan
+  const months = Math.min(Math.max(0, yearsPaid) * 12, n)
+  for (let m = 0; m < months; m++) bal -= M - bal * r
+  return Math.max(0, bal)
+}
+
 // Current rent scenario: total monthly cost projected forward with per-line growth.
 export function projectRent(inp) {
   const rows = []
