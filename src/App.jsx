@@ -554,14 +554,24 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     // 1) The down payment, invested up front and compounded over the holding period.
     const downFV = buyInp.down * Math.pow(g, hy)
     const downGain = downFV - buyInp.down
-    // 2) The yearly buy-minus-rent cash-flow gap, invested at each year end.
-    //    Only the growth counts here — the gap itself is already in buyPaid - rentPaid.
+    // 2) The month-by-month buy-minus-rent cash-flow gap. Each month's surplus is
+    //    invested and grows at the annual rate until the end of the holding period.
+    //    Only the growth counts — the gap itself is already in buyPaid - rentPaid.
+    const totalMonths = hy * 12
+    const diffSchedule = []
     let diffPrincipal = 0
     let diffFV = 0
-    for (let y = 0; y < hy; y++) {
-      const diff = (buyRes.rows[y].gross - rentRes.rows[y].total) * 12
+    for (let m = 0; m < totalMonths; m++) {
+      const yi = Math.floor(m / 12)
+      const buyM = buyRes.rows[yi].gross
+      const rentM = rentRes.rows[yi].total
+      const diff = buyM - rentM
+      const monthsGrown = totalMonths - 1 - m
+      const factor = Math.pow(g, monthsGrown / 12)
+      const fv = diff * factor
       diffPrincipal += diff
-      diffFV += diff * Math.pow(g, hy - 1 - y)
+      diffFV += fv
+      diffSchedule.push({ month: m + 1, year: yi + 1, buy: buyM, rent: rentM, diff, monthsGrown, factor, fv })
     }
     const diffGain = diffFV - diffPrincipal
 
@@ -575,7 +585,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     return {
       hy, buyPaid, rentPaid, loanBal, closingCosts,
       capitalGain, taxableGain, capGainsTax, moneyBack, netBuyCost,
-      downGain, diffGain, buyNet, rentNet, netDiff,
+      downGain, diffGain, diffPrincipal, diffFV, diffSchedule, buyNet, rentNet, netDiff,
     }
   }, [inp, buyInp, rentInp])
 
@@ -670,14 +680,59 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
             <span className="muted">{usd(c.diffGain)}</span>
           </div>
           {showDiffInfo && (
-            <p className="caption info-note">
-              For each year we take (buy monthly cost − rent monthly cost) × 12, invest it at{' '}
-              {(inp.investReturn * 100).toFixed(1)}%, and compound it to year {c.hy}. Only the{' '}
-              <em>growth</em> is counted here — the difference itself is already reflected in the
-              cash-paid figures above, so counting it again would double-count. A negative value
-              means buying costs less month-to-month, so it's the buyer investing the surplus (a
-              benefit to buying).
-            </p>
+            <div className="info-note">
+              <p className="caption" style={{ margin: '0 0 10px' }}>
+                Each month we take <strong>buy − rent</strong> monthly cost and invest that surplus.
+                It grows at {(inp.investReturn * 100).toFixed(1)}%/yr until year {c.hy}, so a surplus
+                in month <em>m</em> is multiplied by {(1 + inp.investReturn).toFixed(2)}
+                <sup>(months left ÷ 12)</sup>. The <strong>gain</strong> used in the comparison is the
+                ending value minus what was put in (the surplus itself is already in the cash-paid
+                totals). A negative diff means buying is cheaper month-to-month — the buyer invests
+                the surplus.
+              </p>
+              <div className="schedule-wrap">
+                <table className="schedule">
+                  <thead>
+                    <tr>
+                      <th>Mo</th>
+                      <th>Yr</th>
+                      <th>Buy/mo</th>
+                      <th>Rent/mo</th>
+                      <th>Diff/mo</th>
+                      <th>Mos left</th>
+                      <th>×Factor</th>
+                      <th>Value @ yr {c.hy}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {c.diffSchedule.map((r) => (
+                      <tr key={r.month}>
+                        <td>{r.month}</td>
+                        <td>{r.year}</td>
+                        <td>{usd(r.buy, 2)}</td>
+                        <td>{usd(r.rent, 2)}</td>
+                        <td>{usd(r.diff, 2)}</td>
+                        <td>{r.monthsGrown}</td>
+                        <td>{r.factor.toFixed(4)}</td>
+                        <td>{usd(r.fv, 2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={4}>Total invested (sum of diffs)</td>
+                      <td>{usd(c.diffPrincipal, 2)}</td>
+                      <td colSpan={2}>Ending value</td>
+                      <td>{usd(c.diffFV, 2)}</td>
+                    </tr>
+                    <tr className="foot-gain">
+                      <td colSpan={7}>Investment gain = ending value − invested</td>
+                      <td>{usd(c.diffGain, 2)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
           )}
           <Row label="Buy — net cost after opportunity cost" value={c.buyNet} strong />
           <Row label="Rent — total cash paid" value={c.rentPaid} />
