@@ -650,7 +650,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
             <span className="hero-value">{usd(c.moneyBack)}</span>
             <span className="hero-note">cash in pocket after selling in year {c.hy}</span>
           </div>
-          <div className={`hero-card ${buyCheaper ? 'accent' : ''}`}>
+          <div className={`hero-card ${buyCheaper ? 'accent' : 'danger'}`}>
             <span className="hero-label">{buyCheaper ? 'Buying is cheaper by' : 'Renting is cheaper by'}</span>
             <span className="hero-value">{usd(advantage)}</span>
             <span className="hero-note">net cost of buying vs. renting, over {c.hy} years</span>
@@ -758,7 +758,8 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
             label={buyCheaper ? 'Buying saves' : 'Renting saves'}
             value={advantage}
             strong
-            accent
+            accent={buyCheaper}
+            danger={!buyCheaper}
           />
         </div>
 
@@ -785,9 +786,9 @@ function Stat({ label, value }) {
   )
 }
 
-function Row({ label, value, strong, accent, muted }) {
+function Row({ label, value, strong, accent, danger, muted }) {
   return (
-    <div className={`brow${strong ? ' strong' : ''}${accent ? ' accent-row' : ''}`}>
+    <div className={`brow${strong ? ' strong' : ''}${accent ? ' accent-row' : ''}${danger ? ' danger-row' : ''}`}>
       <span>{label}</span>
       <span className={muted ? 'muted' : ''}>{usd(value)}</span>
     </div>

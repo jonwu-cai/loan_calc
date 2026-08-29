@@ -8,6 +8,8 @@
   --primary: #2563eb;
   --accent: #059669;
   --accent-soft: #ecfdf5;
+  --danger: #dc2626;
+  --danger-soft: #fef2f2;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
@@ -22,6 +24,8 @@
     --primary: #60a5fa;
     --accent: #34d399;
     --accent-soft: #0f2820;
+    --danger: #f87171;
+    --danger-soft: #2a1416;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
   }
 }
@@ -141,6 +145,8 @@ body {
   background: var(--panel);
 }
 .hero-card.accent { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.hero-card.danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.hero-card.danger .hero-value { color: var(--danger); }
 .hero-label { font-size: 13px; color: var(--muted); }
 .hero-value { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .hero-card.accent .hero-value { color: var(--accent); }
@@ -180,6 +186,7 @@ body {
 .brow:last-child { border-bottom: none; }
 .brow.strong { font-weight: 700; }
 .brow.accent-row { color: var(--accent); font-size: 17px; padding-top: 12px; }
+.brow.danger-row { color: var(--danger); font-size: 17px; padding-top: 12px; }
 .muted { color: var(--muted); }
 
 .table-wrap { overflow-x: auto; }
