@@ -186,6 +186,8 @@ export default function App() {
                   <th>P&I</th>
                   <th>Prop tax</th>
                   <th>HOA</th>
+                  <th>HO-6</th>
+                  <th>PG&E</th>
                   <th>Tax save</th>
                   <th>Gross/mo</th>
                   <th>Net/mo</th>
@@ -198,6 +200,8 @@ export default function App() {
                     <td>{usd(r.pi)}</td>
                     <td>{usd(r.propTaxM)}</td>
                     <td>{usd(r.hoa)}</td>
+                    <td>{usd(r.ho6M)}</td>
+                    <td>{usd(r.pge)}</td>
                     <td className="muted">−{usd(r.taxSaveM)}</td>
                     <td>{usd(r.gross)}</td>
                     <td className="accent-text">{usd(r.net)}</td>
