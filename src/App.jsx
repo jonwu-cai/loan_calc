@@ -166,6 +166,7 @@ export default function App() {
   // Lifted so the Compare tab sees the exact inputs used on the Buy and Rent tabs.
   const [buyInp, setBuyInp] = useState(DEFAULTS)
   const [rentInp, setRentInp] = useState(RENT_DEFAULTS)
+  const [compareInp, setCompareInp] = useState(COMPARE_DEFAULTS)
 
   return (
     <div className="app">
@@ -193,7 +194,9 @@ export default function App() {
 
       {tab === 'buy' && <BuyView inp={buyInp} setInp={setBuyInp} />}
       {tab === 'rent' && <RentView inp={rentInp} setInp={setRentInp} />}
-      {tab === 'compare' && <CompareView buyInp={buyInp} rentInp={rentInp} />}
+      {tab === 'compare' && (
+        <CompareView buyInp={buyInp} rentInp={rentInp} inp={compareInp} setInp={setCompareInp} />
+      )}
     </div>
   )
 }
@@ -492,8 +495,7 @@ function RentView({ inp, setInp }) {
   )
 }
 
-function CompareView({ buyInp, rentInp }) {
-  const [inp, setInp] = useState(COMPARE_DEFAULTS)
+function CompareView({ buyInp, rentInp, inp, setInp }) {
   const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
   const reset = () => setInp(COMPARE_DEFAULTS)
 
