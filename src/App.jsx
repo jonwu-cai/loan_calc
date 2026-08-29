@@ -526,6 +526,7 @@ function RentView({ inp, setInp }) {
 function CompareView({ buyInp, rentInp, inp, setInp }) {
   const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
   const reset = () => setInp(COMPARE_DEFAULTS)
+  const [showDiffInfo, setShowDiffInfo] = useState(false)
 
   const c = useMemo(() => {
     const hy = Math.max(1, Math.round(inp.holdYears))
@@ -563,16 +564,18 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
       diffFV += diff * Math.pow(g, hy - 1 - y)
     }
     const diffGain = diffFV - diffPrincipal
-    const investGains = downGain + diffGain
 
-    // Renter's net cost is reduced by the money those investments earn.
-    const rentNet = rentPaid - investGains
-    const netDiff = netBuyCost - rentNet // <0 => buying is cheaper
+    // Down payment gain is the renter's (they didn't tie it up in a home).
+    const rentNet = rentPaid - downGain
+    // The yearly cash-flow gap is the buyer's opportunity cost: whatever extra the
+    // buyer spends could have been invested, so its growth adds to the cost of owning.
+    const buyNet = netBuyCost + diffGain
+    const netDiff = buyNet - rentNet // <0 => buying is cheaper
 
     return {
       hy, buyPaid, rentPaid, loanBal, closingCosts,
       capitalGain, taxableGain, capGainsTax, moneyBack, netBuyCost,
-      downGain, diffGain, investGains, rentNet, netDiff,
+      downGain, diffGain, buyNet, rentNet, netDiff,
     }
   }, [inp, buyInp, rentInp])
 
@@ -650,10 +653,35 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           <h2>Net comparison over {c.hy} years</h2>
           <Row label="Buy — total cash paid" value={c.buyPaid} />
           <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
-          <Row label="Buy — net cost of owning" value={c.netBuyCost} strong />
+          <Row label="Buy — net cost of owning" value={c.netBuyCost} />
+          <div className="brow">
+            <span>
+              Buy — payment differences invested (gain @ {(inp.investReturn * 100).toFixed(1)}%)
+              <button
+                type="button"
+                className="info-btn"
+                aria-label="How this is calculated"
+                aria-expanded={showDiffInfo}
+                onClick={() => setShowDiffInfo((s) => !s)}
+              >
+                i
+              </button>
+            </span>
+            <span className="muted">{usd(c.diffGain)}</span>
+          </div>
+          {showDiffInfo && (
+            <p className="caption info-note">
+              For each year we take (buy monthly cost − rent monthly cost) × 12, invest it at{' '}
+              {(inp.investReturn * 100).toFixed(1)}%, and compound it to year {c.hy}. Only the{' '}
+              <em>growth</em> is counted here — the difference itself is already reflected in the
+              cash-paid figures above, so counting it again would double-count. A negative value
+              means buying costs less month-to-month, so it's the buyer investing the surplus (a
+              benefit to buying).
+            </p>
+          )}
+          <Row label="Buy — net cost after opportunity cost" value={c.buyNet} strong />
           <Row label="Rent — total cash paid" value={c.rentPaid} />
           <Row label={`Rent — down payment invested (gain @ ${(inp.investReturn * 100).toFixed(1)}%)`} value={-c.downGain} muted />
-          <Row label={`Rent — payment differences invested (gain @ ${(inp.investReturn * 100).toFixed(1)}%)`} value={-c.diffGain} muted />
           <Row label="Rent — net cost after investing" value={c.rentNet} strong />
           <Row
             label={buyCheaper ? 'Buying saves' : 'Renting saves'}
@@ -667,10 +695,10 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           Net cost of owning = all cash paid (P&I, taxes, HOA, insurance, utilities) minus what you
           walk away with at sale. A negative net difference means buying costs less than renting over
           the same period. Capital gain adds renovation and closing costs to basis; the exclusion and
-          rate are editable estimates — verify against your actual situation. Renting also frees up
-          capital: the down payment and any yearly savings vs. buying are assumed invested at{' '}
-          {(inp.investReturn * 100).toFixed(1)}%, and those investment gains are credited to the rent
-          side.
+          rate are editable estimates — verify against your actual situation. Opportunity cost is
+          modeled by investing at {(inp.investReturn * 100).toFixed(1)}%: the renter invests the
+          down payment, and each side invests whatever it saves in monthly cash flow vs. the other
+          (that growth sits on the buy line, since the gap is the buyer's opportunity cost).
         </p>
       </section>
     </div>
