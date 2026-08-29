@@ -223,6 +223,13 @@ function BuyView() {
             <Stat label="Est. tax savings / mo" value={usd(y1.taxSaveM)} />
           </div>
 
+          <CumulativeTotals
+            rows={result.rows}
+            primaryKey="gross"
+            secondaryKey="net"
+            secondaryLabel="Net after tax savings"
+          />
+
           <div className="breakdown">
             <h2>Year 1 monthly breakdown</h2>
             <Row label="Mortgage (P&I)" value={y1.pi} />
@@ -409,6 +416,8 @@ function RentView() {
           </div>
         </div>
 
+        <CumulativeTotals rows={rows} primaryKey="total" />
+
         <div className="breakdown">
           <h2>Year 1 monthly breakdown</h2>
           <Row label="Rent" value={y1.rent} />
@@ -451,6 +460,27 @@ function RentView() {
           All figures are monthly unless noted; growth compounds annually.
         </p>
       </section>
+    </div>
+  )
+}
+
+function CumulativeTotals({ rows, primaryKey, secondaryKey, secondaryLabel }) {
+  const y5 = Math.min(5, rows.length)
+  const y10 = rows.length
+  const sum = (k, upto) => rows.slice(0, upto).reduce((s, r) => s + r[k] * 12, 0)
+  const Box = ({ yrs }) => (
+    <div className="hero-card primary">
+      <span className="hero-label">Total after {yrs} year{yrs === 1 ? '' : 's'}</span>
+      <span className="hero-value">{usd(sum(primaryKey, yrs))}</span>
+      {secondaryKey && (
+        <span className="hero-note">{secondaryLabel}: {usd(sum(secondaryKey, yrs))}</span>
+      )}
+    </div>
+  )
+  return (
+    <div className="hero">
+      <Box yrs={y5} />
+      <Box yrs={y10} />
     </div>
   )
 }
