@@ -81,7 +81,7 @@ const COMPARE_GROUPS = [
     title: 'Capital Gains',
     fields: [
       ['capGainsExclusion', 'Cap gains exclusion', 'usd'],
-      ['capGainsRate', 'Cap gains tax rate', 'pct'],
+      ['capGainsRate', 'Federal LTCG rate', 'pct'],
     ],
   },
   {
@@ -124,7 +124,7 @@ const GROUPS = [
   {
     title: 'Taxes',
     fields: [
-      ['income', 'Annual income', 'usd'],
+      ['income', 'Annual income (AGI)', 'usd'],
       ['caRate', 'CA marginal rate', 'pct'],
       ['saltCap', 'SALT cap', 'usd'],
     ],
@@ -356,22 +356,31 @@ function TaxExplainer({ y1, filing }) {
     <details className="explainer">
       <summary>How the tax savings are calculated (Year 1)</summary>
       <p className="explainer-intro">
-        The benefit comes from deducting two things — <strong>mortgage interest</strong> and{' '}
-        <strong>property tax</strong>. Federal savings are figured across your 2025 marginal tax
-        brackets (the deduction can push you out of the 35% bracket), while California is a flat rate
-        with no SALT cap — so the two are computed separately.
+        The benefit comes from deducting <strong>mortgage interest</strong> and{' '}
+        <strong>property tax</strong>. Federal savings compare itemizing against the standard
+        deduction across your 2025 marginal brackets (the deduction can push you out of the 35%
+        bracket); California has no SALT cap but phases out itemized deductions for high earners — so
+        the two are computed separately.
       </p>
 
       <div className="step">
-        <div className="step-head"><span className="step-num">1</span> Deductible mortgage interest</div>
+        <div className="step-head"><span className="step-num">1</span> Deductible mortgage interest <span className="tag">$750k fed / $1M CA cap</span></div>
         <div className="step-body">
           <span>Interest paid in year 1 (from the amortization schedule)</span>
           <span className="calc-out">{usd(t.interest)}</span>
         </div>
+        <div className="step-body">
+          <span>Federally deductible (interest on first $750k of principal)</span>
+          <span className="calc-out">{usd(t.fedInterest)}</span>
+        </div>
+        <div className="step-body">
+          <span>CA deductible (interest on first $1M of principal)</span>
+          <span className="calc-out">{usd(t.caInterest)}</span>
+        </div>
       </div>
 
       <div className="step">
-        <div className="step-head"><span className="step-num">2</span> How much property tax is deductible federally (SALT cap)</div>
+        <div className="step-head"><span className="step-num">2</span> Federally deductible property tax (SALT cap)</div>
         <div className="step-body">
           <span>Est. CA state income tax ({filing === 'mfj' ? 'MFJ' : 'single'}) — already uses up SALT room</span>
           <span className="calc-out">{usd(t.stateIncTax)}</span>
@@ -384,10 +393,6 @@ function TaxExplainer({ y1, filing }) {
           <span>Room left for property tax = cap − state income tax</span>
           <span className="calc-out">{usd(roomForProp)}</span>
         </div>
-        <div className="step-body">
-          <span>Property tax paid</span>
-          <span className="calc-out">{usd(t.propTaxAnnual)}</span>
-        </div>
         <div className="step-body highlight">
           <span>Federally deductible property tax = min(property tax, room)</span>
           <span className="calc-out">{usd(t.propDeductibleFed)}</span>
@@ -395,17 +400,29 @@ function TaxExplainer({ y1, filing }) {
       </div>
 
       <div className="step">
-        <div className="step-head"><span className="step-num">3</span> Federal savings <span className="tag">marginal brackets</span></div>
+        <div className="step-head"><span className="step-num">3</span> Federal savings <span className="tag">standard vs. itemized, marginal</span></div>
         <div className="step-body">
-          <span>Deduction (mortgage interest + federally deductible property tax)</span>
+          <span>Standard deduction ({filing === 'mfj' ? 'MFJ' : 'single'}, 2025)</span>
+          <span className="calc-out">{usd(t.stdDed)}</span>
+        </div>
+        <div className="step-body">
+          <span>Deduction taken while renting = max(standard, state income tax)</span>
+          <span className="calc-out">{usd(t.dedRent)}</span>
+        </div>
+        <div className="step-body">
+          <span>Deduction taken while owning = max(standard, SALT + interest)</span>
+          <span className="calc-out">{usd(t.dedBuy)}</span>
+        </div>
+        <div className="step-body highlight">
+          <span>Extra deduction from buying</span>
           <span className="calc-out">{usd(t.fedDeduction)}</span>
         </div>
         <div className="step-body">
-          <span>Federal tax on {usd(t.income)}</span>
+          <span>Federal tax on taxable income {usd(t.taxableRent)} (renting)</span>
           <span className="calc-out">{usd(t.fedTaxBefore)}</span>
         </div>
         <div className="step-body">
-          <span>Federal tax after deducting, on {usd(t.incomeAfter)}</span>
+          <span>Federal tax on taxable income {usd(t.taxableBuy)} (owning)</span>
           <span className="calc-out">{usd(t.fedTaxAfter)}</span>
         </div>
         <div className="step-body highlight">
@@ -415,9 +432,21 @@ function TaxExplainer({ y1, filing }) {
       </div>
 
       <div className="step">
-        <div className="step-head"><span className="step-num">4</span> California savings <span className="tag">no SALT cap</span></div>
+        <div className="step-head"><span className="step-num">4</span> California savings <span className="tag">no SALT cap · 6% phase-out</span></div>
         <div className="step-body">
-          <span>({usd(t.interest)} interest + {usd(t.propTaxAnnual)} property tax) × {pct(t.caRate)}</span>
+          <span>CA itemized = deductible interest + full property tax</span>
+          <span className="calc-out">{usd(t.caItemized)}</span>
+        </div>
+        <div className="step-body">
+          <span>Itemized phase-out (6% of AGI over threshold, ≤80% of itemized)</span>
+          <span className="calc-out">−{usd(t.caPhaseOut)}</span>
+        </div>
+        <div className="step-body">
+          <span>CA deductible after phase-out</span>
+          <span className="calc-out">{usd(t.caDeductible)}</span>
+        </div>
+        <div className="step-body highlight">
+          <span>CA savings = {usd(t.caDeductible)} × {pct(t.caRate)}</span>
           <span className="calc-out">{usd(t.caSavings)}</span>
         </div>
       </div>
@@ -434,10 +463,11 @@ function TaxExplainer({ y1, filing }) {
       </div>
 
       <p className="explainer-note">
-        Simplifying assumption: because your state income tax alone already exceeds the standard
-        deduction, buying is treated as adding mortgage interest + property tax on top of deductions
-        you'd take anyway. Federal savings walk down the 2025 brackets from your income; edit your
-        income, CA rate, and SALT cap above to match your situation.
+        The savings are the <em>incremental</em> benefit of buying: we compute your deduction (the
+        larger of the standard deduction or your itemized total) both while renting and while owning,
+        and take the difference in tax. "Annual income" is treated as your income before the
+        standard/itemized deduction (roughly AGI). Edit income, CA rate, and SALT cap to match your
+        situation.
       </p>
     </details>
   )
@@ -556,8 +586,17 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     const closingCosts = inp.salePrice * inp.closingCostPct
     // Capital gain: proceeds net of selling costs and improvements, minus purchase price.
     const capitalGain = inp.salePrice - closingCosts - inp.renovation - buyInp.price
-    const taxableGain = Math.max(0, capitalGain - inp.capGainsExclusion)
-    const capGainsTax = taxableGain * inp.capGainsRate
+    // §121 primary-residence exclusion requires 2 of the last 5 years of ownership+use.
+    const exclusionEligible = hy >= 2
+    const exclusion = exclusionEligible ? inp.capGainsExclusion : 0
+    const taxableGain = Math.max(0, capitalGain - exclusion)
+    // CA taxes gains as ordinary income (use the CA marginal rate); high earners also
+    // owe the 3.8% federal NIIT. Below one year it's short-term (ordinary), flagged in UI.
+    const niitThreshold = buyInp.filing === 'mfj' ? 250000 : 200000
+    const niitRate = buyInp.income > niitThreshold ? 0.038 : 0
+    const capGainsRateTotal = inp.capGainsRate + niitRate + buyInp.caRate
+    const capGainsTax = taxableGain * capGainsRateTotal
+    const shortTerm = hy < 1
     const moneyBack =
       inp.salePrice - closingCosts - inp.renovation - loanBal - capGainsTax
 
@@ -600,7 +639,9 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
 
     return {
       hy, buyPaid, rentPaid, loanBal, closingCosts,
-      capitalGain, taxableGain, capGainsTax, moneyBack, netBuyCost,
+      capitalGain, exclusion, exclusionEligible, taxableGain, capGainsTax,
+      niitRate, capGainsRateTotal, shortTerm,
+      moneyBack, netBuyCost,
       downGain, diffGain, diffPrincipal, diffFV, diffSchedule, buyNet, rentNet, netDiff,
     }
   }, [inp, buyInp, rentInp])
@@ -684,9 +725,26 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
         <div className="breakdown">
           <h2>Capital gains</h2>
           <Row label="Capital gain (sale − closing − renovation − purchase price)" value={c.capitalGain} />
-          <Row label={`Exclusion`} value={-inp.capGainsExclusion} muted />
+          <Row
+            label={c.exclusionEligible ? 'Exclusion' : 'Exclusion (not eligible — held < 2 yrs)'}
+            value={-c.exclusion}
+            muted
+          />
           <Row label="Taxable gain" value={c.taxableGain} />
-          <Row label={`Tax (${(inp.capGainsRate * 100).toFixed(1)}%)`} value={c.capGainsTax} strong />
+          <div className="brow strong">
+            <span>
+              Tax ({(c.capGainsRateTotal * 100).toFixed(1)}% = {(inp.capGainsRate * 100).toFixed(1)}% fed
+              {c.niitRate > 0 && ' + 3.8% NIIT'} + {(buyInp.caRate * 100).toFixed(1)}% CA)
+            </span>
+            <span>{usd(c.capGainsTax)}</span>
+          </div>
+          {c.shortTerm && (
+            <p className="caption">
+              Held under 1 year — this would be a <strong>short-term</strong> gain taxed at ordinary
+              federal rates (higher than the long-term rate shown). Adjust the federal rate to reflect
+              that.
+            </p>
+          )}
         </div>
 
         <div className="breakdown">
@@ -780,8 +838,10 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
         <p className="disclaimer">
           Net cost of owning = all cash paid (P&I, taxes, HOA, insurance, utilities) minus what you
           walk away with at sale. A negative net difference means buying costs less than renting over
-          the same period. Capital gain adds renovation and closing costs to basis; the exclusion and
-          rate are editable estimates — verify against your actual situation. Opportunity cost is
+          the same period. Capital gain adds renovation and closing costs to basis; the §121
+          exclusion applies only if held ≥ 2 years, and the gain is taxed at the federal long-term
+          rate + 3.8% NIIT (high earners) + your CA marginal rate (CA has no preferential rate) —
+          all editable estimates; verify against your actual situation. Opportunity cost is
           modeled by investing at {(inp.investReturn * 100).toFixed(1)}%: the renter invests the
           down payment, and each side invests whatever it saves in monthly cash flow vs. the other
           (that growth sits on the buy line, since the gap is the buyer's opportunity cost).

@@ -21,6 +21,16 @@ const FED_BRACKETS_MFJ = [
   [394600, 0.32], [501050, 0.35], [751600, 0.37],
 ]
 
+// 2025 federal standard deduction (post-OBBBA).
+const FED_STD_DEDUCTION = { single: 15750, mfj: 31500 }
+// Mortgage-interest acquisition-debt limits: interest is deductible only on the
+// portion of principal up to these caps. Federal $750k; California conforms to $1M.
+const FED_MORTGAGE_LIMIT = 750000
+const CA_MORTGAGE_LIMIT = 1000000
+// CA itemized-deduction phase-out: reduce itemized by the lesser of 6% of AGI over
+// the threshold or 80% of itemized. 2025 FTB AGI thresholds.
+const CA_ITEMIZED_PHASEOUT = { single: 252203, mfj: 504411 }
+
 function bracketTax(income, brackets) {
   let tax = 0
   for (let i = 0; i < brackets.length; i++) {
@@ -113,22 +123,37 @@ export function project(inp) {
     const propTaxAnnual = assessed * inp.propTaxRate
     const propTaxM = propTaxAnnual / 12
 
-    // Federal: SALT-capped. State income tax usually eats most of the cap,
-    // property tax is deductible only up to the remaining room.
-    const saltBefore = Math.min(stateIncTax, inp.saltCap)
-    const saltAfter = Math.min(stateIncTax + propTaxAnnual, inp.saltCap)
+    // Deductible interest is limited by acquisition-debt caps (fed $750k, CA $1M):
+    // only the fraction of the loan under the cap earns a deduction.
+    const fedInterest = interest * (loan > 0 ? Math.min(1, FED_MORTGAGE_LIMIT / loan) : 0)
+    const caInterest = interest * (loan > 0 ? Math.min(1, CA_MORTGAGE_LIMIT / loan) : 0)
+
+    // Federal: compare itemizing (SALT-capped) against the standard deduction, in both
+    // the renting and owning cases, then take the marginal tax difference. This models
+    // the standard-deduction floor and stacks the deduction at the right income level.
+    const stdDed = FED_STD_DEDUCTION[inp.filing] ?? FED_STD_DEDUCTION.single
+    const saltBefore = Math.min(stateIncTax, inp.saltCap)              // renting: SALT = state income tax
+    const saltAfter = Math.min(stateIncTax + propTaxAnnual, inp.saltCap) // owning: + property tax
     const propDeductibleFed = saltAfter - saltBefore
-    // Federal savings is marginal: the deduction comes off the top of income, so
-    // it saves at 35% only until income drops below the 35% bracket floor, then 32%,
-    // etc. Compute it as the actual change in federal tax across the brackets.
-    const fedDeduction = interest + propDeductibleFed
-    const incomeAfter = Math.max(0, inp.income - fedDeduction)
-    const fedTaxBefore = fedIncomeTax(inp.income, inp.filing)
-    const fedTaxAfter = fedIncomeTax(incomeAfter, inp.filing)
+    const itemizedRent = saltBefore
+    const itemizedBuy = saltAfter + fedInterest
+    const dedRent = Math.max(stdDed, itemizedRent)
+    const dedBuy = Math.max(stdDed, itemizedBuy)
+    const fedDeduction = dedBuy - dedRent // incremental deduction actually gained by buying
+    const taxableRent = Math.max(0, inp.income - dedRent)
+    const taxableBuy = Math.max(0, inp.income - dedBuy)
+    const fedTaxBefore = fedIncomeTax(taxableRent, inp.filing)
+    const fedTaxAfter = fedIncomeTax(taxableBuy, inp.filing)
     const fedSavings = fedTaxBefore - fedTaxAfter
     const fedEffRate = fedDeduction > 0 ? fedSavings / fedDeduction : 0
-    // CA: no SALT cap, allows mortgage interest + property tax.
-    const caSavings = (interest + propTaxAnnual) * inp.caRate
+
+    // California: no SALT cap (full property tax + mortgage interest, state income tax
+    // itself not deductible), but itemized deductions phase out for high earners.
+    const caThreshold = CA_ITEMIZED_PHASEOUT[inp.filing] ?? CA_ITEMIZED_PHASEOUT.single
+    const caItemized = caInterest + propTaxAnnual
+    const caPhaseOut = Math.min(0.06 * Math.max(0, inp.income - caThreshold), 0.8 * caItemized)
+    const caDeductible = caItemized - caPhaseOut
+    const caSavings = caDeductible * inp.caRate
     const taxSaveM = (fedSavings + caSavings) / 12
 
     const gross = M + propTaxM + hoa + ho6 / 12 + pge
@@ -148,18 +173,29 @@ export function project(inp) {
       // Full working for the tax-savings breakdown (annual figures).
       tax: {
         interest,
+        fedInterest,
+        caInterest,
         propTaxAnnual,
         stateIncTax,
         saltCap: inp.saltCap,
         saltBefore,
         saltAfter,
         propDeductibleFed,
+        stdDed,
+        itemizedRent,
+        itemizedBuy,
+        dedRent,
+        dedBuy,
         fedDeduction,
         income: inp.income,
-        incomeAfter,
+        taxableRent,
+        taxableBuy,
         fedTaxBefore,
         fedTaxAfter,
         fedEffRate,
+        caItemized,
+        caPhaseOut,
+        caDeductible,
         caRate: inp.caRate,
         fedSavings,
         caSavings,
