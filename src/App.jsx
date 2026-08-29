@@ -331,7 +331,7 @@ function BuyView({ inp, setInp }) {
                     <td className="muted">−{usd(r.taxSaveM)}</td>
                     <td>{usd(r.gross)}</td>
                     <td className="accent-text col-hl">{usd(r.net)}</td>
-                    <td className="faded">{usd(result.rows.slice(0, i + 1).reduce((s, x) => s + x.gross * 12, 0))}</td>
+                    <td className="faded">{usd(result.rows.slice(0, i + 1).reduce((s, x) => s + x.net * 12, 0))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -534,7 +534,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     // Cumulative cash paid over the holding period on each path.
     const buyRes = project({ ...buyInp, years: hy })
     const rentRes = projectRent({ ...rentInp, years: hy })
-    const buyPaid = buyRes.rows.reduce((s, r) => s + r.gross * 12, 0)
+    const buyPaid = buyRes.rows.reduce((s, r) => s + r.net * 12, 0)
     const rentPaid = rentRes.rows.reduce((s, r) => s + r.total * 12, 0)
 
     // Sale side.
@@ -563,7 +563,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     let diffFV = 0
     for (let m = 0; m < totalMonths; m++) {
       const yi = Math.floor(m / 12)
-      const buyM = buyRes.rows[yi].gross
+      const buyM = buyRes.rows[yi].net
       const rentM = rentRes.rows[yi].total
       const diff = buyM - rentM
       const monthsGrown = totalMonths - 1 - m
@@ -661,7 +661,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
 
         <div className="breakdown">
           <h2>Net comparison over {c.hy} years</h2>
-          <Row label="Buy — total cash paid" value={c.buyPaid} />
+          <Row label="Buy — total net cost (after tax savings)" value={c.buyPaid} />
           <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
           <Row label="Buy — net cost of owning" value={c.netBuyCost} />
           <div className="brow">
