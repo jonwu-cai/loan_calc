@@ -680,7 +680,6 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           <Row label="Buy — down payment" value={buyInp.down} />
           <Row label="Buy — total net cost (after tax savings)" value={c.buyPaid} />
           <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
-          <Row label="Buy — net cost of owning" value={c.netBuyCost} />
           <div className="brow">
             <span>
               Buy — payment differences invested (gain @ {(inp.investReturn * 100).toFixed(1)}%)
