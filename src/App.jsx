@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { project, projectRent, remainingBalance } from './calc.js'
 
 const usd = (n, dp = 0) =>
@@ -128,14 +128,33 @@ const GROUPS = [
 
 function Field({ fieldKey, label, kind, value, onChange }) {
   // Percent fields are stored as decimals but shown/edited as percents.
-  const display = kind === 'pct' ? +(value * 100).toFixed(4) : value
+  const toDisplay = (v) => (kind === 'pct' ? +(v * 100).toFixed(4) : v)
+  // Local draft so the field can be cleared/edited freely instead of snapping to 0.
+  const [text, setText] = useState(String(toDisplay(value)))
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setText(String(toDisplay(value)))
+  }, [value, focused]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const step = kind === 'pct' ? 0.05 : kind === 'usd' ? 1000 : 1
   const handle = (e) => {
     const raw = e.target.value
-    if (raw === '') return onChange(fieldKey, 0)
+    setText(raw)
+    if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return
     const num = parseFloat(raw)
     if (Number.isNaN(num)) return
     onChange(fieldKey, kind === 'pct' ? num / 100 : num)
+  }
+  const handleBlur = () => {
+    setFocused(false)
+    const num = parseFloat(text)
+    if (text === '' || Number.isNaN(num)) {
+      onChange(fieldKey, 0)
+      setText('0')
+    } else {
+      setText(String(toDisplay(kind === 'pct' ? num / 100 : num)))
+    }
   }
   return (
     <label className="field">
@@ -144,9 +163,11 @@ function Field({ fieldKey, label, kind, value, onChange }) {
         {kind === 'usd' && <span className="adorn adorn-left">$</span>}
         <input
           type="number"
-          value={display}
+          value={text}
           step={step}
+          onFocus={() => setFocused(true)}
           onChange={handle}
+          onBlur={handleBlur}
           className={kind === 'usd' ? 'has-left' : kind === 'pct' ? 'has-right' : ''}
         />
         {kind === 'pct' && <span className="adorn adorn-right">%</span>}
