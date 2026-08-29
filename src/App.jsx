@@ -13,7 +13,7 @@ const DEFAULTS = {
   propTaxGrowth: 0.02,
   hoa: 1007,
   hoaGrowth: 0.055,
-  ho6Annual: 600,
+  ho6Annual: 1299,
   ho6Growth: 0,
   pge: 200,
   pgeGrowth: 0,
@@ -22,7 +22,7 @@ const DEFAULTS = {
   fedRate: 0.35,
   caRate: 0.093,
   saltCap: 40000,
-  years: 5,
+  years: 10,
 }
 
 // field: [key, label, kind] where kind is 'usd' | 'pct' | 'num'
