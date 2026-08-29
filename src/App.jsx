@@ -561,7 +561,9 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     const moneyBack =
       inp.salePrice - closingCosts - inp.renovation - loanBal - capGainsTax
 
-    const netBuyCost = buyPaid - moneyBack
+    // Down payment is upfront cash out. It comes back at sale inside moneyBack
+    // (a smaller loan balance means more equity), so it must be charged here too.
+    const netBuyCost = buyInp.down + buyPaid - moneyBack
 
     // Opportunity cost of buying: capital the renter can invest instead.
     const g = 1 + inp.investReturn
@@ -675,6 +677,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
 
         <div className="breakdown">
           <h2>Net comparison over {c.hy} years</h2>
+          <Row label="Buy — down payment" value={buyInp.down} />
           <Row label="Buy — total net cost (after tax savings)" value={c.buyPaid} />
           <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
           <Row label="Buy — net cost of owning" value={c.netBuyCost} />
