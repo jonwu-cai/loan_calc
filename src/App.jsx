@@ -65,6 +65,7 @@ const COMPARE_DEFAULTS = {
   renovation: 0,
   capGainsExclusion: 250000,
   capGainsRate: 0.15,
+  investReturn: 0.05,
 }
 
 const COMPARE_GROUPS = [
@@ -82,6 +83,12 @@ const COMPARE_GROUPS = [
     fields: [
       ['capGainsExclusion', 'Cap gains exclusion', 'usd'],
       ['capGainsRate', 'Cap gains tax rate', 'pct'],
+    ],
+  },
+  {
+    title: 'Opportunity Cost (invest instead)',
+    fields: [
+      ['investReturn', 'Investment return', 'pct'],
     ],
   },
 ]
@@ -540,11 +547,32 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
       inp.salePrice - closingCosts - inp.renovation - loanBal - capGainsTax
 
     const netBuyCost = buyPaid - moneyBack
-    const netDiff = netBuyCost - rentPaid // <0 => buying is cheaper
+
+    // Opportunity cost of buying: capital the renter can invest instead.
+    const g = 1 + inp.investReturn
+    // 1) The down payment, invested up front and compounded over the holding period.
+    const downFV = buyInp.down * Math.pow(g, hy)
+    const downGain = downFV - buyInp.down
+    // 2) The yearly buy-minus-rent cash-flow gap, invested at each year end.
+    //    Only the growth counts here — the gap itself is already in buyPaid - rentPaid.
+    let diffPrincipal = 0
+    let diffFV = 0
+    for (let y = 0; y < hy; y++) {
+      const diff = (buyRes.rows[y].gross - rentRes.rows[y].total) * 12
+      diffPrincipal += diff
+      diffFV += diff * Math.pow(g, hy - 1 - y)
+    }
+    const diffGain = diffFV - diffPrincipal
+    const investGains = downGain + diffGain
+
+    // Renter's net cost is reduced by the money those investments earn.
+    const rentNet = rentPaid - investGains
+    const netDiff = netBuyCost - rentNet // <0 => buying is cheaper
 
     return {
       hy, buyPaid, rentPaid, loanBal, closingCosts,
-      capitalGain, taxableGain, capGainsTax, moneyBack, netBuyCost, netDiff,
+      capitalGain, taxableGain, capGainsTax, moneyBack, netBuyCost,
+      downGain, diffGain, investGains, rentNet, netDiff,
     }
   }, [inp, buyInp, rentInp])
 
@@ -623,7 +651,10 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           <Row label="Buy — total cash paid" value={c.buyPaid} />
           <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
           <Row label="Buy — net cost of owning" value={c.netBuyCost} strong />
-          <Row label="Rent — total cash paid" value={c.rentPaid} strong />
+          <Row label="Rent — total cash paid" value={c.rentPaid} />
+          <Row label={`Rent — down payment invested (gain @ ${(inp.investReturn * 100).toFixed(1)}%)`} value={-c.downGain} muted />
+          <Row label={`Rent — payment differences invested (gain @ ${(inp.investReturn * 100).toFixed(1)}%)`} value={-c.diffGain} muted />
+          <Row label="Rent — net cost after investing" value={c.rentNet} strong />
           <Row
             label={buyCheaper ? 'Buying saves' : 'Renting saves'}
             value={advantage}
@@ -636,7 +667,10 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           Net cost of owning = all cash paid (P&I, taxes, HOA, insurance, utilities) minus what you
           walk away with at sale. A negative net difference means buying costs less than renting over
           the same period. Capital gain adds renovation and closing costs to basis; the exclusion and
-          rate are editable estimates — verify against your actual situation.
+          rate are editable estimates — verify against your actual situation. Renting also frees up
+          capital: the down payment and any yearly savings vs. buying are assumed invested at{' '}
+          {(inp.investReturn * 100).toFixed(1)}%, and those investment gains are credited to the rent
+          side.
         </p>
       </section>
     </div>
