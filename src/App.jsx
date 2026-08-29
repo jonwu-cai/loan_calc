@@ -574,6 +574,13 @@ function CompareView({ buyInp, rentInp }) {
           <Row label={`Exclusion`} value={-inp.capGainsExclusion} muted />
           <Row label="Taxable gain" value={c.taxableGain} />
           <Row label={`Tax (${(inp.capGainsRate * 100).toFixed(1)}%)`} value={c.capGainsTax} strong />
+          <p className="caption">
+            Your profit is the sale price minus what you put in — the purchase price plus
+            improvements (renovation) and selling costs (closing) all raise your cost basis, so they
+            shrink the taxable gain. The IRS then lets a primary-residence seller exclude the first{' '}
+            {usd(inp.capGainsExclusion)} of gain ($250k single / $500k married). Only the gain above
+            that exclusion is taxed, here at {(inp.capGainsRate * 100).toFixed(1)}%.
+          </p>
         </div>
 
         <div className="breakdown">
