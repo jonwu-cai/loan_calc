@@ -19,7 +19,6 @@ const DEFAULTS = {
   pgeGrowth: 0.08,
   income: 300000,
   filing: 'single',
-  fedRate: 0.35,
   caRate: 0.093,
   saltCap: 40000,
   years: 10,
@@ -126,7 +125,6 @@ const GROUPS = [
     title: 'Taxes',
     fields: [
       ['income', 'Annual income', 'usd'],
-      ['fedRate', 'Federal marginal rate', 'pct'],
       ['caRate', 'CA marginal rate', 'pct'],
       ['saltCap', 'SALT cap', 'usd'],
     ],
@@ -340,8 +338,10 @@ function BuyView({ inp, setInp }) {
 
           <p className="disclaimer">
             Tax savings are realized annually (smaller tax bill / larger refund), not as reduced
-            monthly checks — your real out-of-pocket is the gross figure. Marginal rates, SALT cap,
-            and property-tax rate are editable estimates; verify against your actual situation.
+            monthly checks — your real out-of-pocket is the gross figure. Federal savings use 2025
+            marginal brackets (so a large deduction that drops you out of the 35% bracket saves less
+            on that portion); income, CA rate, SALT cap and property-tax rate are editable estimates
+            — verify against your actual situation.
           </p>
         </section>
       </div>
@@ -357,8 +357,9 @@ function TaxExplainer({ y1, filing }) {
       <summary>How the tax savings are calculated (Year 1)</summary>
       <p className="explainer-intro">
         The benefit comes from deducting two things — <strong>mortgage interest</strong> and{' '}
-        <strong>property tax</strong> — then multiplying by your marginal tax rates. Federal and
-        California are computed separately because CA has no SALT cap.
+        <strong>property tax</strong>. Federal savings are figured across your 2025 marginal tax
+        brackets (the deduction can push you out of the 35% bracket), while California is a flat rate
+        with no SALT cap — so the two are computed separately.
       </p>
 
       <div className="step">
@@ -394,9 +395,21 @@ function TaxExplainer({ y1, filing }) {
       </div>
 
       <div className="step">
-        <div className="step-head"><span className="step-num">3</span> Federal savings</div>
+        <div className="step-head"><span className="step-num">3</span> Federal savings <span className="tag">marginal brackets</span></div>
         <div className="step-body">
-          <span>({usd(t.interest)} interest + {usd(t.propDeductibleFed)} property tax) × {pct(t.fedRate)}</span>
+          <span>Deduction (mortgage interest + federally deductible property tax)</span>
+          <span className="calc-out">{usd(t.fedDeduction)}</span>
+        </div>
+        <div className="step-body">
+          <span>Federal tax on {usd(t.income)}</span>
+          <span className="calc-out">{usd(t.fedTaxBefore)}</span>
+        </div>
+        <div className="step-body">
+          <span>Federal tax after deducting, on {usd(t.incomeAfter)}</span>
+          <span className="calc-out">{usd(t.fedTaxAfter)}</span>
+        </div>
+        <div className="step-body highlight">
+          <span>Federal savings = tax before − tax after (effective {pct(t.fedEffRate)})</span>
           <span className="calc-out">{usd(t.fedSavings)}</span>
         </div>
       </div>
@@ -423,7 +436,8 @@ function TaxExplainer({ y1, filing }) {
       <p className="explainer-note">
         Simplifying assumption: because your state income tax alone already exceeds the standard
         deduction, buying is treated as adding mortgage interest + property tax on top of deductions
-        you'd take anyway. Edit the federal/CA rates and SALT cap above to match your exact bracket.
+        you'd take anyway. Federal savings walk down the 2025 brackets from your income; edit your
+        income, CA rate, and SALT cap above to match your situation.
       </p>
     </details>
   )

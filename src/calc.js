@@ -11,8 +11,17 @@ const CA_BRACKETS_MFJ = [
   [108162, 0.08], [136700, 0.093], [698274, 0.103],
 ]
 
-export function caIncomeTax(income, filing) {
-  const brackets = filing === 'mfj' ? CA_BRACKETS_MFJ : CA_BRACKETS_SINGLE
+// Federal income tax, 2025 brackets.
+const FED_BRACKETS_SINGLE = [
+  [0, 0.10], [11925, 0.12], [48475, 0.22], [103350, 0.24],
+  [197300, 0.32], [250525, 0.35], [626350, 0.37],
+]
+const FED_BRACKETS_MFJ = [
+  [0, 0.10], [23850, 0.12], [96950, 0.22], [206700, 0.24],
+  [394600, 0.32], [501050, 0.35], [751600, 0.37],
+]
+
+function bracketTax(income, brackets) {
   let tax = 0
   for (let i = 0; i < brackets.length; i++) {
     const [lo, rt] = brackets[i]
@@ -21,6 +30,14 @@ export function caIncomeTax(income, filing) {
     else break
   }
   return tax
+}
+
+export function caIncomeTax(income, filing) {
+  return bracketTax(income, filing === 'mfj' ? CA_BRACKETS_MFJ : CA_BRACKETS_SINGLE)
+}
+
+export function fedIncomeTax(income, filing) {
+  return bracketTax(Math.max(0, income), filing === 'mfj' ? FED_BRACKETS_MFJ : FED_BRACKETS_SINGLE)
 }
 
 export function monthlyPI(loan, annualRate, termYears) {
@@ -101,7 +118,15 @@ export function project(inp) {
     const saltBefore = Math.min(stateIncTax, inp.saltCap)
     const saltAfter = Math.min(stateIncTax + propTaxAnnual, inp.saltCap)
     const propDeductibleFed = saltAfter - saltBefore
-    const fedSavings = (interest + propDeductibleFed) * inp.fedRate
+    // Federal savings is marginal: the deduction comes off the top of income, so
+    // it saves at 35% only until income drops below the 35% bracket floor, then 32%,
+    // etc. Compute it as the actual change in federal tax across the brackets.
+    const fedDeduction = interest + propDeductibleFed
+    const incomeAfter = Math.max(0, inp.income - fedDeduction)
+    const fedTaxBefore = fedIncomeTax(inp.income, inp.filing)
+    const fedTaxAfter = fedIncomeTax(incomeAfter, inp.filing)
+    const fedSavings = fedTaxBefore - fedTaxAfter
+    const fedEffRate = fedDeduction > 0 ? fedSavings / fedDeduction : 0
     // CA: no SALT cap, allows mortgage interest + property tax.
     const caSavings = (interest + propTaxAnnual) * inp.caRate
     const taxSaveM = (fedSavings + caSavings) / 12
@@ -129,7 +154,12 @@ export function project(inp) {
         saltBefore,
         saltAfter,
         propDeductibleFed,
-        fedRate: inp.fedRate,
+        fedDeduction,
+        income: inp.income,
+        incomeAfter,
+        fedTaxBefore,
+        fedTaxAfter,
+        fedEffRate,
         caRate: inp.caRate,
         fedSavings,
         caSavings,
