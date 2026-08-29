@@ -49,6 +49,26 @@ export function yearInterest(loan, annualRate, termYears, M, yearIndex) {
   return { interest: totInt, endBalance: bal }
 }
 
+// Current rent scenario: total monthly cost projected forward with per-line growth.
+export function projectRent(inp) {
+  const rows = []
+  let rent = inp.rent
+  let pge = inp.pge
+  let trash = inp.trash
+  let water = inp.water
+
+  for (let yr = 1; yr <= inp.years; yr++) {
+    const total = rent + pge + trash + water
+    rows.push({ year: yr, rent, pge, trash, water, total })
+    rent *= 1 + inp.rentGrowth
+    pge *= 1 + inp.pgeGrowth
+    trash *= 1 + inp.trashGrowth
+    water *= 1 + inp.waterGrowth
+  }
+
+  return { rows }
+}
+
 export function project(inp) {
   const loan = Math.max(0, inp.price - inp.down)
   const M = monthlyPI(loan, inp.rate, inp.termYears)

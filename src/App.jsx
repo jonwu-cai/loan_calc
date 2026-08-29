@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { project } from './calc.js'
+import { project, projectRent } from './calc.js'
 
 const usd = (n, dp = 0) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: dp, minimumFractionDigits: dp })
@@ -24,6 +24,39 @@ const DEFAULTS = {
   saltCap: 40000,
   years: 10,
 }
+
+const RENT_DEFAULTS = {
+  rent: 6369,
+  pge: 200,
+  trash: 44.87,
+  water: 188.48,
+  rentGrowth: 0.01,
+  pgeGrowth: 0.08,
+  trashGrowth: 0.05,
+  waterGrowth: 0.05,
+  years: 10,
+}
+
+const RENT_GROUPS = [
+  {
+    title: 'Current Monthly Costs',
+    fields: [
+      ['rent', 'Rent', 'usd'],
+      ['pge', 'PG&E / utilities', 'usd'],
+      ['water', 'Water', 'usd'],
+      ['trash', 'Trash', 'usd'],
+    ],
+  },
+  {
+    title: 'Annual Growth Rates',
+    fields: [
+      ['rentGrowth', 'Rent growth', 'pct'],
+      ['pgeGrowth', 'PG&E growth', 'pct'],
+      ['waterGrowth', 'Water growth', 'pct'],
+      ['trashGrowth', 'Trash growth', 'pct'],
+    ],
+  },
+]
 
 // field: [key, label, kind] where kind is 'usd' | 'pct' | 'num'
 const GROUPS = [
@@ -95,6 +128,42 @@ function Field({ fieldKey, label, kind, value, onChange }) {
 }
 
 export default function App() {
+  const [tab, setTab] = useState('buy')
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>Housing Cost Calculator</h1>
+        <p className="sub">
+          Compare the monthly cost of buying a condo against your current rent — each with a
+          10-year projection. Every field is editable.
+        </p>
+      </header>
+
+      <div className="tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'buy'}
+          className={`tab${tab === 'buy' ? ' active' : ''}`}
+          onClick={() => setTab('buy')}
+        >
+          Buy (condo)
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'rent'}
+          className={`tab${tab === 'rent' ? ' active' : ''}`}
+          onClick={() => setTab('rent')}
+        >
+          Rent (today)
+        </button>
+      </div>
+
+      {tab === 'buy' ? <BuyView /> : <RentView />}
+    </div>
+  )
+}
+
+function BuyView() {
   const [inp, setInp] = useState(DEFAULTS)
   const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
   const reset = () => setInp(DEFAULTS)
@@ -103,16 +172,7 @@ export default function App() {
   const y1 = result.rows[0]
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>Condo Cost Calculator</h1>
-        <p className="sub">
-          Live monthly carrying cost after property tax, insurance, HOA, utilities and tax
-          deductions — with a multi-year projection. Every field is editable.
-        </p>
-      </header>
-
-      <div className="layout">
+    <div className="layout">
         <section className="inputs">
           {GROUPS.map((g) => (
             <div className="group" key={g.title}>
@@ -218,7 +278,6 @@ export default function App() {
           </p>
         </section>
       </div>
-    </div>
   )
 }
 
@@ -227,7 +286,7 @@ function TaxExplainer({ y1, filing }) {
   const roomForProp = Math.max(0, t.saltCap - t.stateIncTax)
   const pct = (r) => `${(r * 100).toFixed(2)}%`
   return (
-    <details className="explainer" open>
+    <details className="explainer">
       <summary>How the tax savings are calculated (Year 1)</summary>
       <p className="explainer-intro">
         The benefit comes from deducting two things — <strong>mortgage interest</strong> and{' '}
@@ -300,6 +359,99 @@ function TaxExplainer({ y1, filing }) {
         you'd take anyway. Edit the federal/CA rates and SALT cap above to match your exact bracket.
       </p>
     </details>
+  )
+}
+
+function RentView() {
+  const [inp, setInp] = useState(RENT_DEFAULTS)
+  const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
+  const reset = () => setInp(RENT_DEFAULTS)
+
+  const result = useMemo(() => projectRent(inp), [inp])
+  const rows = result.rows
+  const y1 = rows[0]
+  const yLast = rows[rows.length - 1]
+  const totalPaid = rows.reduce((s, r) => s + r.total * 12, 0)
+
+  return (
+    <div className="layout">
+      <section className="inputs">
+        {RENT_GROUPS.map((g) => (
+          <div className="group" key={g.title}>
+            <h2>{g.title}</h2>
+            <div className="grid">
+              {g.fields.map(([k, label, kind]) => (
+                <Field key={k} fieldKey={k} label={label} kind={kind} value={inp[k]} onChange={update} />
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="group">
+          <h2>Projection</h2>
+          <div className="grid">
+            <Field fieldKey="years" label="Years to project" kind="num" value={inp.years} onChange={update} />
+          </div>
+        </div>
+        <button className="reset" onClick={reset}>Reset to defaults</button>
+      </section>
+
+      <section className="outputs">
+        <div className="hero">
+          <div className="hero-card primary">
+            <span className="hero-label">Year 1 total / month</span>
+            <span className="hero-value">{usd(y1.total)}</span>
+            <span className="hero-note">rent + utilities today</span>
+          </div>
+          <div className="hero-card accent">
+            <span className="hero-label">Year {yLast.year} total / month</span>
+            <span className="hero-value">{usd(yLast.total)}</span>
+            <span className="hero-note">after {inp.years} years of growth</span>
+          </div>
+        </div>
+
+        <div className="breakdown">
+          <h2>Year 1 monthly breakdown</h2>
+          <Row label="Rent" value={y1.rent} />
+          <Row label="PG&E / utilities" value={y1.pge} />
+          <Row label="Water" value={y1.water} />
+          <Row label="Trash" value={y1.trash} />
+          <Row label="Total monthly" value={y1.total} strong accent />
+        </div>
+
+        <div className="table-wrap">
+          <h2>{inp.years}-year projection</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Rent</th>
+                <th>PG&E</th>
+                <th>Water</th>
+                <th>Trash</th>
+                <th>Total/mo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.year}>
+                  <td>{r.year}</td>
+                  <td>{usd(r.rent)}</td>
+                  <td>{usd(r.pge)}</td>
+                  <td>{usd(r.water)}</td>
+                  <td>{usd(r.trash)}</td>
+                  <td className="accent-text">{usd(r.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="disclaimer">
+          Total paid over {inp.years} years at these growth rates: <strong>{usd(totalPaid)}</strong>.
+          All figures are monthly unless noted; growth compounds annually.
+        </p>
+      </section>
+    </div>
   )
 }
 
