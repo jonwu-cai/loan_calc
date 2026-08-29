@@ -251,10 +251,11 @@ function BuyView() {
                   <th>Tax save</th>
                   <th>Gross/mo</th>
                   <th>Net/mo</th>
+                  <th className="faded">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {result.rows.map((r) => (
+                {result.rows.map((r, i) => (
                   <tr key={r.year}>
                     <td>{r.year}</td>
                     <td>{usd(r.pi)}</td>
@@ -265,6 +266,7 @@ function BuyView() {
                     <td className="muted">−{usd(r.taxSaveM)}</td>
                     <td>{usd(r.gross)}</td>
                     <td className="accent-text">{usd(r.net)}</td>
+                    <td className="faded">{usd(result.rows.slice(0, i + 1).reduce((s, x) => s + x.gross * 12, 0))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -276,13 +278,6 @@ function BuyView() {
             monthly checks — your real out-of-pocket is the gross figure. Marginal rates, SALT cap,
             and property-tax rate are editable estimates; verify against your actual situation.
           </p>
-
-          <CumulativeTotals
-            rows={result.rows}
-            primaryKey="gross"
-            secondaryKey="net"
-            secondaryLabel="Net after tax savings"
-          />
         </section>
       </div>
   )
@@ -436,10 +431,11 @@ function RentView() {
                 <th>Water</th>
                 <th>Trash</th>
                 <th>Total/mo</th>
+                <th className="faded">Total</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r, i) => (
                 <tr key={r.year}>
                   <td>{r.year}</td>
                   <td>{usd(r.rent)}</td>
@@ -447,6 +443,7 @@ function RentView() {
                   <td>{usd(r.water)}</td>
                   <td>{usd(r.trash)}</td>
                   <td className="accent-text">{usd(r.total)}</td>
+                  <td className="faded">{usd(rows.slice(0, i + 1).reduce((s, x) => s + x.total * 12, 0))}</td>
                 </tr>
               ))}
             </tbody>
@@ -457,30 +454,7 @@ function RentView() {
           Total paid over {inp.years} years at these growth rates: <strong>{usd(totalPaid)}</strong>.
           All figures are monthly unless noted; growth compounds annually.
         </p>
-
-        <CumulativeTotals rows={rows} primaryKey="total" />
       </section>
-    </div>
-  )
-}
-
-function CumulativeTotals({ rows, primaryKey, secondaryKey, secondaryLabel }) {
-  const y5 = Math.min(5, rows.length)
-  const y10 = rows.length
-  const sum = (k, upto) => rows.slice(0, upto).reduce((s, r) => s + r[k] * 12, 0)
-  const Box = ({ yrs }) => (
-    <div className="hero-card primary">
-      <span className="hero-label">Total after {yrs} year{yrs === 1 ? '' : 's'}</span>
-      <span className="hero-value">{usd(sum(primaryKey, yrs))}</span>
-      {secondaryKey && (
-        <span className="hero-note">{secondaryLabel}: {usd(sum(secondaryKey, yrs))}</span>
-      )}
-    </div>
-  )
-  return (
-    <div className="hero">
-      <Box yrs={y5} />
-      <Box yrs={y10} />
     </div>
   )
 }
