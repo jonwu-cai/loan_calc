@@ -30,7 +30,7 @@ const RENT_DEFAULTS = {
   pge: 200,
   trash: 44.87,
   water: 188.48,
-  rentGrowth: 0.01,
+  rentGrowth: 0.02,
   pgeGrowth: 0.08,
   trashGrowth: 0.05,
   waterGrowth: 0.05,
