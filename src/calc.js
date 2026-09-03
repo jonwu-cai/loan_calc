@@ -107,6 +107,140 @@ export function projectRent(inp) {
   return { rows }
 }
 
+// Rent-OUT scenario: you own the condo and lease it to a tenant. Projects annual
+// cash flow and its tax treatment (Schedule E) year by year.
+//
+// Key modeling choices, all grounded in current federal/CA rules:
+//  - PG&E is excluded — the tenant pays their own utilities (per requirement).
+//  - Mortgage INTEREST is fully deductible against rental income on Schedule E (the
+//    $750k Schedule-A acquisition-debt cap does NOT apply to rental property), but
+//    only interest is deductible — principal is cash out, not an expense.
+//  - Depreciation: the building portion of the purchase price (price × (1 − land%))
+//    is depreciated straight-line over 27.5 years, shielding rental income.
+//  - Passive Activity Loss rules: a net rental loss is only deductible against ordinary
+//    income up to the $25k special allowance, which phases out $0.50/$1 of MAGI over
+//    $100k and is fully gone at $150k MAGI. Above that, losses are SUSPENDED and carried
+//    forward to offset future rental income (or gain at sale).
+//  - NIIT: net rental income is net investment income, so high earners owe 3.8% on it.
+export function projectRentOut(inp) {
+  const loan = Math.max(0, inp.price - inp.down)
+  const M = monthlyPI(loan, inp.rate, inp.termYears)
+
+  // Depreciable basis = building only (land isn't depreciable). 27.5-yr straight line.
+  const depreciableBasis = Math.max(0, inp.price * (1 - inp.landPct))
+  const depreciation = depreciableBasis / 27.5
+
+  const niitThreshold = inp.filing === 'mfj' ? 250000 : 200000
+
+  // Years you own before converting to a rental. During that time the mortgage keeps
+  // amortizing and the carrying costs (property tax, HOA, insurance) grow, so the first
+  // rental year picks up at that later, grown point. `rent` is the rate you'll charge
+  // when renting begins (year delay+1), so it isn't pre-grown.
+  const delay = Math.max(0, Math.round(inp.rentStartYear || 0))
+
+  const rows = []
+  let assessed = inp.price * Math.pow(1 + inp.propTaxGrowth, delay)
+  let hoa = inp.hoa * Math.pow(1 + inp.hoaGrowth, delay)
+  let ho6 = inp.ho6Annual * Math.pow(1 + inp.ho6Growth, delay)
+  let rent = inp.rent
+  let lossCarry = 0 // suspended passive losses carried forward
+
+  for (let yr = 1; yr <= inp.years; yr++) {
+    const { interest } = yearInterest(loan, inp.rate, inp.termYears, M, delay + yr - 1)
+    const propTaxAnnual = assessed * inp.propTaxRate
+
+    // Income side, net of vacancy.
+    const grossRent = rent * 12
+    const vacancyLoss = grossRent * inp.vacancyRate
+    const effectiveRent = grossRent - vacancyLoss
+
+    // Cash operating expenses (no PG&E — tenant pays).
+    const mgmtFee = effectiveRent * inp.mgmtRate
+    const maintenance = grossRent * inp.maintenanceRate
+    const hoaAnnual = hoa * 12
+    const ho6Annual = ho6
+    const cashOpEx = propTaxAnnual + hoaAnnual + ho6Annual + mgmtFee + maintenance
+
+    // Pre-tax cash flow uses the FULL mortgage payment (principal + interest).
+    const mortgageAnnual = M * 12
+    const preTaxCF = effectiveRent - cashOpEx - mortgageAnnual
+
+    // Taxable rental income (Schedule E): deduct interest + depreciation, not principal.
+    const netRentalIncome = effectiveRent - cashOpEx - interest - depreciation
+
+    // Tax treatment.
+    let taxableRental = 0
+    let lossUsed = 0 // prior suspended losses applied against this year's income
+    let deductibleLoss = 0
+    let suspendedLoss = 0
+    let specialAllowance = 0
+    let fedTax = 0
+    let caTax = 0
+    let niit = 0
+
+    if (netRentalIncome >= 0) {
+      // Prior suspended losses offset current rental income first.
+      lossUsed = Math.min(lossCarry, netRentalIncome)
+      lossCarry -= lossUsed
+      taxableRental = netRentalIncome - lossUsed
+      fedTax = fedIncomeTax(inp.income + taxableRental, inp.filing) - fedIncomeTax(inp.income, inp.filing)
+      caTax = caIncomeTax(inp.income + taxableRental, inp.filing) - caIncomeTax(inp.income, inp.filing)
+      niit = inp.income > niitThreshold ? taxableRental * 0.038 : 0
+    } else {
+      const loss = -netRentalIncome
+      specialAllowance = Math.max(0, Math.min(25000, 25000 - 0.5 * Math.max(0, inp.income - 100000)))
+      deductibleLoss = Math.min(loss, specialAllowance)
+      suspendedLoss = loss - deductibleLoss
+      lossCarry += suspendedLoss
+      // A currently-deductible loss reduces ordinary income (a tax benefit → negative tax).
+      fedTax = -(fedIncomeTax(inp.income, inp.filing) - fedIncomeTax(inp.income - deductibleLoss, inp.filing))
+      caTax = -(caIncomeTax(inp.income, inp.filing) - caIncomeTax(inp.income - deductibleLoss, inp.filing))
+    }
+
+    const rentalTax = fedTax + caTax + niit // >0 = you owe; <0 = benefit
+    const afterTaxCF = preTaxCF - rentalTax
+
+    rows.push({
+      year: yr,
+      ownYear: delay + yr,
+      rent,
+      grossRent,
+      vacancyLoss,
+      effectiveRent,
+      hoaAnnual,
+      ho6Annual,
+      propTaxAnnual,
+      mgmtFee,
+      maintenance,
+      cashOpEx,
+      mortgageAnnual,
+      interest,
+      principal: mortgageAnnual - interest,
+      depreciation,
+      preTaxCF,
+      netRentalIncome,
+      taxableRental,
+      lossUsed,
+      deductibleLoss,
+      suspendedLoss,
+      specialAllowance,
+      lossCarry,
+      fedTax,
+      caTax,
+      niit,
+      rentalTax,
+      afterTaxCF,
+    })
+
+    rent *= 1 + inp.rentGrowth
+    assessed *= 1 + inp.propTaxGrowth
+    hoa *= 1 + inp.hoaGrowth
+    ho6 *= 1 + inp.ho6Growth
+  }
+
+  return { loan, monthlyPI: M, depreciableBasis, depreciation, delay, rows }
+}
+
 export function project(inp) {
   const loan = Math.max(0, inp.price - inp.down)
   const M = monthlyPI(loan, inp.rate, inp.termYears)

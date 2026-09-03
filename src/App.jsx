@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { project, projectRent, remainingBalance } from './calc.js'
+import { project, projectRent, projectRentOut, remainingBalance } from './calc.js'
 
 const usd = (n, dp = 0) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: dp, minimumFractionDigits: dp })
@@ -21,7 +21,7 @@ const DEFAULTS = {
   filing: 'single',
   caRate: 0.093,
   saltCap: 40000,
-  years: 10,
+  years: 30,
 }
 
 const RENT_DEFAULTS = {
@@ -33,7 +33,7 @@ const RENT_DEFAULTS = {
   pgeGrowth: 0.08,
   trashGrowth: 0.05,
   waterGrowth: 0.05,
-  years: 10,
+  years: 30,
 }
 
 const RENT_GROUPS = [
@@ -57,6 +57,40 @@ const RENT_GROUPS = [
   },
 ]
 
+const RENTOUT_DEFAULTS = {
+  rentStartYear: 0,
+  rent: 5500,
+  rentGrowth: 0.03,
+  vacancyRate: 0.05,
+  mgmtRate: 0.08,
+  maintenanceRate: 0.05,
+  landPct: 0.2,
+  years: 30,
+}
+
+const RENTOUT_GROUPS = [
+  {
+    title: 'Rental Income',
+    fields: [
+      ['rentStartYear', 'Start renting after (yrs owned)', 'num'],
+      ['rent', 'Monthly rent charged', 'usd'],
+      ['rentGrowth', 'Rent growth', 'pct'],
+      ['vacancyRate', 'Vacancy rate', 'pct'],
+    ],
+  },
+  {
+    title: 'Operating Costs (% of rent)',
+    fields: [
+      ['mgmtRate', 'Property mgmt fee', 'pct'],
+      ['maintenanceRate', 'Maintenance / repairs', 'pct'],
+    ],
+  },
+  {
+    title: 'Depreciation',
+    fields: [['landPct', 'Land value (% of price)', 'pct']],
+  },
+]
+
 const COMPARE_DEFAULTS = {
   holdYears: 5,
   salePrice: 900000,
@@ -65,6 +99,7 @@ const COMPARE_DEFAULTS = {
   capGainsExclusion: 250000,
   capGainsRate: 0.15,
   investReturn: 0.05,
+  investTaxRate: 0.37,
 }
 
 const COMPARE_GROUPS = [
@@ -88,6 +123,7 @@ const COMPARE_GROUPS = [
     title: 'Opportunity Cost (invest instead)',
     fields: [
       ['investReturn', 'Investment return', 'pct'],
+      ['investTaxRate', 'Investment tax rate', 'pct'],
     ],
   },
 ]
@@ -131,7 +167,7 @@ const GROUPS = [
   },
 ]
 
-function Field({ fieldKey, label, kind, value, onChange }) {
+function Field({ fieldKey, label, kind, value, onChange, hint }) {
   // Percent fields are stored as decimals but shown/edited as percents.
   const toDisplay = (v) => (kind === 'pct' ? +(v * 100).toFixed(4) : v)
   // Local draft so the field can be cleared/edited freely instead of snapping to 0.
@@ -177,6 +213,7 @@ function Field({ fieldKey, label, kind, value, onChange }) {
         />
         {kind === 'pct' && <span className="adorn adorn-right">%</span>}
       </div>
+      {hint && <span className="field-hint">{hint}</span>}
     </label>
   )
 }
@@ -184,6 +221,7 @@ function Field({ fieldKey, label, kind, value, onChange }) {
 const TABS = [
   ['buy', 'Buy (condo)'],
   ['rent', 'Rent (today)'],
+  ['rentout', 'Rent it out'],
   ['compare', 'Compare'],
 ]
 
@@ -192,6 +230,7 @@ export default function App() {
   // Lifted so the Compare tab sees the exact inputs used on the Buy and Rent tabs.
   const [buyInp, setBuyInp] = useState(DEFAULTS)
   const [rentInp, setRentInp] = useState(RENT_DEFAULTS)
+  const [rentOutInp, setRentOutInp] = useState(RENTOUT_DEFAULTS)
   const [compareInp, setCompareInp] = useState(COMPARE_DEFAULTS)
 
   return (
@@ -199,8 +238,8 @@ export default function App() {
       <header className="header">
         <h1>Housing Cost Calculator</h1>
         <p className="sub">
-          Compare the monthly cost of buying a condo against your current rent — each with a
-          10-year projection. Every field is editable.
+          Compare the monthly cost of buying a condo against your current rent — with an adjustable
+          projection out to 30 years. Every field is editable.
         </p>
       </header>
 
@@ -220,6 +259,9 @@ export default function App() {
 
       {tab === 'buy' && <BuyView inp={buyInp} setInp={setBuyInp} />}
       {tab === 'rent' && <RentView inp={rentInp} setInp={setRentInp} />}
+      {tab === 'rentout' && (
+        <RentOutView buyInp={buyInp} inp={rentOutInp} setInp={setRentOutInp} />
+      )}
       {tab === 'compare' && (
         <CompareView buyInp={buyInp} rentInp={rentInp} inp={compareInp} setInp={setCompareInp} />
       )}
@@ -242,7 +284,15 @@ function BuyView({ inp, setInp }) {
               <h2>{g.title}</h2>
               <div className="grid">
                 {g.fields.map(([k, label, kind]) => (
-                  <Field key={k} fieldKey={k} label={label} kind={kind} value={inp[k]} onChange={update} />
+                  <Field
+                    key={k}
+                    fieldKey={k}
+                    label={label}
+                    kind={kind}
+                    value={inp[k]}
+                    onChange={update}
+                    hint={k === 'down' && inp.price > 0 ? `${((inp.down / inp.price) * 100).toFixed(1)}% of price` : undefined}
+                  />
                 ))}
               </div>
             </div>
@@ -567,6 +617,278 @@ function RentView({ inp, setInp }) {
   )
 }
 
+function RentOutView({ buyInp, inp, setInp }) {
+  const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
+  const reset = () => setInp(RENTOUT_DEFAULTS)
+
+  // The rent-out scenario runs on the SAME condo you'd buy — price, loan, property
+  // tax, HOA and insurance all come from the Buy tab. Its own `years` wins.
+  const merged = useMemo(() => ({ ...buyInp, ...inp }), [buyInp, inp])
+  const result = useMemo(() => projectRentOut(merged), [merged])
+  const rows = result.rows
+  const y1 = rows[0]
+  const m = (annual) => annual / 12 // annual → monthly for the breakdown
+  const grossYield = buyInp.price > 0 ? (y1.grossRent / buyInp.price) * 100 : 0
+  const cumAfterTax = rows.reduce((s, r) => s + r.afterTaxCF, 0)
+  const finalCarry = rows[rows.length - 1].lossCarry
+  const positive = y1.afterTaxCF >= 0
+
+  return (
+    <div className="layout">
+      <section className="inputs">
+        {RENTOUT_GROUPS.map((g) => (
+          <div className="group" key={g.title}>
+            <h2>{g.title}</h2>
+            <div className="grid">
+              {g.fields.map(([k, label, kind]) => (
+                <Field
+                  key={k}
+                  fieldKey={k}
+                  label={label}
+                  kind={kind}
+                  value={inp[k]}
+                  onChange={update}
+                  hint={
+                    k === 'rent' && buyInp.price > 0
+                      ? `${grossYield.toFixed(1)}% gross yield/yr`
+                      : k === 'rentStartYear'
+                      ? result.delay > 0
+                        ? `first rental year = ownership year ${result.delay + 1}`
+                        : 'rent from day one'
+                      : k === 'landPct'
+                      ? `${(100 - inp.landPct * 100).toFixed(0)}% building = ${usd(result.depreciableBasis)} basis`
+                      : undefined
+                  }
+                />
+              ))}
+            </div>
+            {g.title === 'Depreciation' && (
+              <p className="caption">
+                You only set the <strong>land %</strong> — land can't be depreciated, so it's carved
+                out of the price (a condo still owns a small share of the land under the building).
+                The rest (the building, {usd(result.depreciableBasis)}) is written off on a fixed IRS
+                schedule: straight-line over <strong>27.5 years</strong> (3.64%/yr) ={' '}
+                <strong>{usd(result.depreciation)}/yr</strong>. Set land % from your county assessor's
+                land-vs-improvement split (typically 15–25% for a condo).
+              </p>
+            )}
+          </div>
+        ))}
+        <div className="group">
+          <h2>Projection</h2>
+          <div className="grid">
+            <Field fieldKey="years" label="Years to project" kind="num" value={inp.years} onChange={update} />
+          </div>
+          <p className="caption">
+            Purchase price, loan, property tax, HOA and insurance come from the{' '}
+            <strong>Buy</strong> tab ({usd(buyInp.price)} condo, {usd(result.loan)} loan). PG&amp;E is
+            excluded — your tenant pays it.
+            {result.delay > 0 && (
+              <>
+                {' '}You own it {result.delay} year{result.delay > 1 ? 's' : ''} first, so by the first
+                rental year the mortgage is further paid down and property tax, HOA and insurance have
+                grown to their year-{result.delay + 1} levels ({usd(y1.hoaAnnual / 12)}/mo HOA,{' '}
+                {usd(y1.propTaxAnnual / 12)}/mo tax).
+              </>
+            )}
+          </p>
+        </div>
+        <button className="reset" onClick={reset}>Reset to defaults</button>
+      </section>
+
+      <section className="outputs">
+        <div className="hero">
+          <div className={`hero-card ${positive ? 'accent' : 'danger'}`}>
+            <span className="hero-label">Year 1 net cash flow / month</span>
+            <span className="hero-value">{usd(m(y1.afterTaxCF))}</span>
+            <span className="hero-note">after tax, in your pocket</span>
+          </div>
+          <div className="hero-card primary">
+            <span className="hero-label">Year 1 pre-tax cash flow / month</span>
+            <span className="hero-value">{usd(m(y1.preTaxCF))}</span>
+            <span className="hero-note">rent − expenses − full mortgage</span>
+          </div>
+        </div>
+
+        <div className="stats">
+          <Stat label="Monthly rent" value={usd(y1.rent)} />
+          <Stat label="Mortgage P&I / mo" value={usd(result.monthlyPI)} />
+          <Stat label="Depreciation / yr" value={usd(result.depreciation)} />
+          <Stat label="Gross yield" value={`${grossYield.toFixed(1)}%`} />
+        </div>
+
+        <div className="breakdown">
+          <h2>Year 1 monthly cash flow</h2>
+          <Row label="Rent collected" value={y1.rent} />
+          <Row label={`Vacancy (${(inp.vacancyRate * 100).toFixed(1)}%)`} value={-m(y1.vacancyLoss)} muted />
+          <Row label="HOA" value={-m(y1.hoaAnnual)} muted />
+          <Row label="Property tax" value={-m(y1.propTaxAnnual)} muted />
+          <Row label="HO-6 insurance" value={-m(y1.ho6Annual)} muted />
+          <Row label={`Management fee (${(inp.mgmtRate * 100).toFixed(1)}%)`} value={-m(y1.mgmtFee)} muted />
+          <Row label={`Maintenance (${(inp.maintenanceRate * 100).toFixed(1)}%)`} value={-m(y1.maintenance)} muted />
+          <Row label="Mortgage (P&I)" value={-m(y1.mortgageAnnual)} muted />
+          <Row label="Pre-tax cash flow" value={m(y1.preTaxCF)} strong />
+          <Row
+            label={y1.rentalTax >= 0 ? 'Income tax on rental' : 'Tax benefit from loss'}
+            value={-m(y1.rentalTax)}
+            muted
+          />
+          <Row
+            label="Net monthly cash flow"
+            value={m(y1.afterTaxCF)}
+            strong
+            accent={positive}
+            danger={!positive}
+          />
+        </div>
+
+        <div className="breakdown">
+          <h2>Rental income tax — Schedule E (year 1, annual)</h2>
+          <Row label="Effective rental income" value={y1.effectiveRent} />
+          <Row label="Operating expenses (deductible)" value={-y1.cashOpEx} muted />
+          <Row label="Mortgage interest (deductible, no $750k cap)" value={-y1.interest} muted />
+          <Row label="Depreciation (non-cash)" value={-y1.depreciation} muted />
+          <Row
+            label={y1.netRentalIncome >= 0 ? 'Net taxable rental income' : 'Net rental loss'}
+            value={y1.netRentalIncome}
+            strong
+          />
+          {y1.netRentalIncome >= 0 ? (
+            <>
+              {y1.lossUsed > 0 && (
+                <Row label="Less: prior suspended losses applied" value={-y1.lossUsed} muted />
+              )}
+              <Row label="Taxable rental income" value={y1.taxableRental} />
+              <Row label="Federal tax (marginal)" value={-y1.fedTax} muted />
+              {y1.niit > 0 && <Row label="Federal NIIT (3.8%)" value={-y1.niit} muted />}
+              <Row label="CA tax (marginal)" value={-y1.caTax} muted />
+              <Row label="Total rental income tax" value={-y1.rentalTax} strong danger={y1.rentalTax > 0} />
+            </>
+          ) : (
+            <>
+              <Row label="§469 special allowance (phases out $100k–$150k MAGI)" value={y1.specialAllowance} muted />
+              <Row label="Currently deductible loss" value={y1.deductibleLoss} />
+              <Row label="Suspended loss carried forward" value={y1.suspendedLoss} muted />
+              <Row
+                label={y1.deductibleLoss > 0 ? 'Tax benefit this year' : 'No current tax benefit (loss suspended)'}
+                value={-y1.rentalTax}
+                strong
+                accent={y1.rentalTax < 0}
+              />
+            </>
+          )}
+        </div>
+
+        <RentOutTaxExplainer />
+
+        <div className="table-wrap">
+          <h2>{inp.years}-year projection (annual)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th>
+                <th>Rent/mo</th>
+                <th>Op ex</th>
+                <th>Interest</th>
+                <th>Deprec.</th>
+                <th>Taxable</th>
+                <th>Tax</th>
+                <th>Pre-tax CF</th>
+                <th className="col-hl">After-tax CF</th>
+                <th className="faded">Cumulative</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.year}>
+                  <td>{r.year}</td>
+                  <td>{usd(r.rent)}</td>
+                  <td>{usd(r.cashOpEx)}</td>
+                  <td>{usd(r.interest)}</td>
+                  <td>{usd(r.depreciation)}</td>
+                  <td className={r.netRentalIncome < 0 ? 'muted' : ''}>{usd(r.netRentalIncome)}</td>
+                  <td className="muted">{r.rentalTax >= 0 ? `−${usd(r.rentalTax)}` : `+${usd(-r.rentalTax)}`}</td>
+                  <td>{usd(r.preTaxCF)}</td>
+                  <td className={`col-hl ${r.afterTaxCF >= 0 ? 'accent-text' : ''}`}>{usd(r.afterTaxCF)}</td>
+                  <td className="faded">{usd(rows.slice(0, i + 1).reduce((s, x) => s + x.afterTaxCF, 0))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="disclaimer">
+          Net cash flow over {inp.years} years: <strong>{usd(cumAfterTax)}</strong> after tax
+          (pre-tax {usd(rows.reduce((s, r) => s + r.preTaxCF, 0))}).{' '}
+          {finalCarry > 0 && (
+            <>
+              At your income the $25,000 special allowance is fully phased out, so net rental losses are{' '}
+              <strong>suspended</strong>: {usd(finalCarry)} of passive losses accumulate by year{' '}
+              {inp.years}, offsetting future rental profit or your gain at sale (they aren't lost).{' '}
+            </>
+          )}
+          Pre-tax cash flow spends the full mortgage payment; the tax line only deducts the interest
+          portion plus depreciation, so a property can be cash-flow positive yet show a taxable loss.
+          Not tax advice — verify brackets and your situation.
+        </p>
+      </section>
+    </div>
+  )
+}
+
+function RentOutTaxExplainer() {
+  return (
+    <details className="explainer">
+      <summary>How renting it out is taxed</summary>
+      <p className="explainer-intro">
+        Rental profit is ordinary income (federal Schedule E + CA), but it's taxed on the{' '}
+        <strong>net</strong> after expenses and depreciation — not the rent you collect. Four rules
+        drive the number:
+      </p>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">1</span> Deduct interest &amp; depreciation <span className="tag">no $750k cap</span></div>
+        <div className="step-body">
+          <span>Mortgage <strong>interest</strong> is fully deductible on Schedule E — the $750k acquisition-debt cap only applies to a primary residence (Schedule A). Only interest, not principal.</span>
+        </div>
+        <div className="step-body">
+          <span><strong>Depreciation</strong>: the building (price minus land) is written off straight-line over 27.5 years (~3.64%/yr). It's a non-cash deduction that shields rental income, so you can be cash-positive but show a tax loss.</span>
+        </div>
+      </div>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">2</span> Passive-loss rules <span className="tag">$25k allowance, gone at $150k</span></div>
+        <div className="step-body">
+          <span>Rentals are passive. A net loss offsets W-2/other income only up to a $25,000 special allowance, which phases out $0.50 per $1 of MAGI from $100k to $150k. Above $150k MAGI it's $0 — the loss is <strong>suspended</strong> and carried forward (Form 8582 / CA FTB 3801) to offset future rental profit or the gain when you sell. It isn't lost, just deferred.</span>
+        </div>
+      </div>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">3</span> Net income is taxed + NIIT <span className="tag">3.8% federal</span></div>
+        <div className="step-body">
+          <span>When the rental shows a profit (after any carried-forward losses), it stacks on your ordinary income at your marginal federal + CA rates. High earners (MAGI &gt; $200k single / $250k MFJ) also owe the <strong>3.8% NIIT</strong> on net rental income — federal only, CA has no NIIT.</span>
+        </div>
+      </div>
+
+      <div className="step">
+        <div className="step-head"><span className="step-num">4</span> At sale <span className="tag">recapture &amp; QBI</span></div>
+        <div className="step-body">
+          <span>Depreciation you took is recaptured at sale (unrecaptured §1250 gain, up to 25% federal; CA taxes it as ordinary income) — modeled on the Compare tab, not here.</span>
+        </div>
+        <div className="step-body">
+          <span>A 20% QBI deduction can apply if the rental clears the Rev. Proc. 2019-38 safe harbor (≥250 hours/yr, separate books, logs). A single passively-managed condo usually won't — so it's not assumed here.</span>
+        </div>
+      </div>
+
+      <p className="explainer-note">
+        Based on IRS Pub. 527 (rental property), Pub. 925 (passive-activity/at-risk rules), Pub. 936
+        (the $750k cap is Schedule A only), Form 8960 (NIIT), and CA FTB Form 3801. Brackets shift
+        yearly — verify against the current IRS/FTB tables.
+      </p>
+    </details>
+  )
+}
+
 function CompareView({ buyInp, rentInp, inp, setInp }) {
   const update = (key, val) => setInp((s) => ({ ...s, [key]: val }))
   const reset = () => setInp(COMPARE_DEFAULTS)
@@ -630,11 +952,20 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
     }
     const diffGain = diffFV - diffPrincipal
 
+    // Investment gains are taxable too. The rate is editable (default 37% — top federal
+    // ordinary bracket, for gains taxed as ordinary income rather than long-term). Applied
+    // to the gain only, not the contributed principal, when liquidated at year hy.
+    const invTaxRate = inp.investTaxRate
+    const downGainTax = downGain * invTaxRate
+    const downGainNet = downGain - downGainTax
+    const diffGainTax = diffGain * invTaxRate
+    const diffGainNet = diffGain - diffGainTax
+
     // Down payment gain is the renter's (they didn't tie it up in a home).
-    const rentNet = rentPaid - downGain
+    const rentNet = rentPaid - downGainNet
     // The yearly cash-flow gap is the buyer's opportunity cost: whatever extra the
     // buyer spends could have been invested, so its growth adds to the cost of owning.
-    const buyNet = netBuyCost + diffGain
+    const buyNet = netBuyCost + diffGainNet
     const netDiff = buyNet - rentNet // <0 => buying is cheaper
 
     return {
@@ -643,6 +974,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
       niitRate, capGainsRateTotal, shortTerm,
       moneyBack, netBuyCost,
       downGain, diffGain, diffPrincipal, diffFV, diffSchedule, buyNet, rentNet, netDiff,
+      invTaxRate, downGainTax, downGainNet, diffGainTax, diffGainNet,
     }
   }, [inp, buyInp, rentInp])
 
@@ -749,7 +1081,10 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
 
         <div className="breakdown">
           <h2>Net comparison over {c.hy} years</h2>
-          <Row label="Buy — down payment" value={buyInp.down} />
+          <Row
+            label={`Buy — down payment${buyInp.price > 0 ? ` (${((buyInp.down / buyInp.price) * 100).toFixed(1)}% of price)` : ''}`}
+            value={buyInp.down}
+          />
           <Row label="Buy — total net cost (after tax savings)" value={c.buyPaid} />
           <Row label="Buy — money back from sale" value={-c.moneyBack} muted />
           <div className="brow">
@@ -767,6 +1102,11 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
             </span>
             <span className="muted">{usd(c.diffGain)}</span>
           </div>
+          <Row
+            label={`Buy — cap-gains tax on that gain (${(c.invTaxRate * 100).toFixed(1)}%)`}
+            value={-c.diffGainTax}
+            muted
+          />
           {showDiffInfo && (
             <div className="info-note">
               <p className="caption" style={{ margin: '0 0 10px' }}>
@@ -825,6 +1165,7 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           <Row label="Buy — net cost after opportunity cost" value={c.buyNet} strong />
           <Row label="Rent — total cash paid" value={c.rentPaid} />
           <Row label={`Rent — down payment invested (gain @ ${(inp.investReturn * 100).toFixed(1)}%)`} value={-c.downGain} muted />
+          <Row label={`Rent — cap-gains tax on that gain (${(c.invTaxRate * 100).toFixed(1)}%)`} value={c.downGainTax} muted />
           <Row label="Rent — net cost after investing" value={c.rentNet} strong />
           <Row
             label={buyCheaper ? 'Buying saves' : 'Renting saves'}
@@ -844,7 +1185,11 @@ function CompareView({ buyInp, rentInp, inp, setInp }) {
           all editable estimates; verify against your actual situation. Opportunity cost is
           modeled by investing at {(inp.investReturn * 100).toFixed(1)}%: the renter invests the
           down payment, and each side invests whatever it saves in monthly cash flow vs. the other
-          (that growth sits on the buy line, since the gap is the buyer's opportunity cost).
+          (that growth sits on the buy line, since the gap is the buyer's opportunity cost). Those
+          investment gains are themselves taxed at the editable investment tax rate
+          ({(c.invTaxRate * 100).toFixed(1)}%, defaulting to the 37% top federal ordinary bracket)
+          when the portfolio is liquidated at year {c.hy} — so the after-tax investment return, not
+          the headline rate, is what competes with the after-tax mortgage.
         </p>
       </section>
     </div>
